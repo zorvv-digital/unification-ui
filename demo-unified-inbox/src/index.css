@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body, #root {
+    @apply h-full m-0 p-0 overflow-hidden;
+  }
+}
