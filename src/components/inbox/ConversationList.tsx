@@ -1,0 +1,111 @@
+import React from 'react';
+import { MessageSquare, Mail } from 'lucide-react';
+import { InstagramIcon } from '../icons/InstagramIcon';
+import { FaWhatsapp } from 'react-icons/fa';
+import { ChannelSummary } from './ChannelSummary';
+import { FilterBar } from './FilterBar';
+import type { FilterType, SortType } from './FilterBar';
+import { Avatar } from '../messaging/Avatar';
+import type { Conversation, Contact, Message } from '../../types/messaging';
+
+interface ConversationListProps {
+  conversations: Conversation[];
+  contacts: Contact[];
+  getMessages: (id: string) => Message[];
+  activeFilter: FilterType;
+  onFilterChange: (f: FilterType) => void;
+  activeSort: SortType;
+  onSortChange: (s: SortType) => void;
+  selectedConversationId?: string;
+  onSelectConversation: (id: string) => void;
+  stats: any;
+}
+
+export const ConversationList: React.FC<ConversationListProps> = ({ 
+  conversations, contacts, getMessages,
+  activeFilter, onFilterChange,
+  activeSort, onSortChange,
+  selectedConversationId, onSelectConversation,
+  stats
+}) => {
+  return (
+    <div className="h-full bg-white border-r border-[var(--color-brand-border)] flex flex-col z-0">
+      <ChannelSummary stats={stats} />
+      <FilterBar 
+        activeFilter={activeFilter} 
+        onFilterChange={onFilterChange} 
+        activeSort={activeSort}
+        onSortChange={onSortChange}
+      />
+      
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        {conversations.length === 0 ? (
+          <div className="p-8 text-center text-sm text-[var(--color-brand-text-secondary)]">
+            No conversations found.
+          </div>
+        ) : (
+          conversations.map(conv => {
+            const contact = contacts.find(c => c.id === conv.contactId);
+            if (!contact) return null;
+            
+            const msgs = getMessages(conv.id);
+            const lastMsg = msgs[msgs.length - 1];
+            const isActive = selectedConversationId === conv.id;
+            
+            let PlatformIcon: React.ElementType = FaWhatsapp;
+            let iconColor = 'text-[#25D366]';
+            if (conv.platform === 'instagram') {
+              PlatformIcon = InstagramIcon as any;
+              iconColor = 'text-[#E1306C]';
+            } else if (conv.platform === 'messenger') {
+              PlatformIcon = MessageSquare;
+              iconColor = 'text-[#0084FF]';
+            } else if (conv.platform === 'gmail') {
+              PlatformIcon = Mail;
+              iconColor = 'text-red-500';
+            }
+
+            return (
+              <button 
+                key={conv.id}
+                onClick={() => onSelectConversation(conv.id)}
+                className={`
+                  flex items-center px-4 py-3 border-b border-gray-100 text-left transition-colors relative
+                  ${isActive ? 'bg-gray-50' : 'hover:bg-gray-50'}
+                `}
+              >
+                {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-800 rounded-r"></div>}
+                
+                <div className="relative mr-3 shrink-0">
+                  <Avatar src={contact.avatar} alt={contact.name} size="lg" />
+                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm ${iconColor}`}>
+                    <PlatformIcon size={12} />
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <h3 className="font-semibold text-[14px] text-[var(--color-brand-text)] truncate">{contact.name}</h3>
+                    <span className={`text-[11px] whitespace-nowrap ml-2 ${conv.unreadCount > 0 ? 'text-[var(--color-brand-text)] font-semibold' : 'text-gray-500'}`}>
+                      {new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <p className={`text-[13px] truncate ${conv.unreadCount > 0 ? 'text-[var(--color-brand-text)] font-medium' : 'text-gray-500'}`}>
+                      {lastMsg?.direction === 'outbound' ? 'You: ' : ''}{lastMsg?.content || 'Attachment'}
+                    </p>
+                    {conv.unreadCount > 0 && (
+                      <div className="bg-gray-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shrink-0 min-w-[20px] text-center">
+                        {conv.unreadCount}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};

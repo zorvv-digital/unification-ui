@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #ffffff;
+  --color-brand-surface: #f9fafb;
+  --color-brand-border: #e5e7eb;
+  --color-brand-text: #111827;
+  --color-brand-text-secondary: #6b7280;
+  
+  --color-platform-whatsapp: #25D366;
+  --color-platform-instagram: #E1306C;
+  --color-platform-messenger: #0084FF;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--color-brand-surface);
+  color: var(--color-brand-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Base resets */
+* {
+  box-sizing: border-box;
+}
+
+/* Utilities for hiding scrollbar but allowing scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
