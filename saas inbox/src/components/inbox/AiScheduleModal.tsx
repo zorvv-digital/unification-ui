@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Clock, ChevronDown } from 'lucide-react';
+import { apiService } from '../../context/MessagingContext';
+import { aiApi, type AgentSummary, type Channel } from '../../services/aiApi';
 
 interface BreakPeriod {
   id: string;
@@ -25,7 +27,38 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
   const [endTime, setEndTime] = useState('17:00');
   const [breaks, setBreaks] = useState<BreakPeriod[]>([]);
 
+  // API mode: auto-reply is set per channel with one answering agent (the schedule is mock-only).
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [agentId, setAgentId] = useState('');
+  const [enabledIds, setEnabledIds] = useState<string[]>([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !apiService) return;
+    setError('');
+    Promise.all([aiApi.listChannels(), aiApi.listAgents()]).then(([channelList, agentList]) => {
+      const enabled = channelList.filter(c => c.ai_enabled);
+      setChannels(channelList);
+      setAgents(agentList);
+      setAgentId(enabled[0]?.ai_agent_id ?? agentList[0]?.id ?? '');
+      setEnabledIds((enabled.length ? enabled : channelList).map(c => c.id));
+    }).catch(err => setError(err.message));
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const saveAutoReply = async () => {
+    try {
+      await Promise.all(channels.map(c => aiApi.updateChannel(c.id, enabledIds.includes(c.id)
+        ? { ai_enabled: true, ai_agent_id: agentId }
+        : { ai_enabled: false })));
+      onSave();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save');
+    }
+  };
 
   const addBreak = () => {
     setBreaks([...breaks, { id: Date.now().toString(), start: '12:00', end: '13:00' }]);
@@ -54,7 +87,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center gap-2 text-[var(--color-brand-text)]">
             <Clock size={20} className="text-blue-600" />
-            <h2 className="font-semibold text-lg">AI Automation Schedule</h2>
+            <h2 className="font-semibold text-lg">{apiService ? 'AI Auto-Reply' : 'AI Automation Schedule'}</h2>
           </div>
           <button 
             onClick={onClose}
@@ -67,9 +100,49 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
         {/* Content */}
         <div className="px-6 py-6 flex-1 overflow-y-auto max-h-[60vh]">
           <p className="text-sm text-[var(--color-brand-text-secondary)] mb-6">
-            Configure when the AI should automatically reply to incoming messages.
+            {apiService
+              ? 'Choose the agent that answers new customer messages, and the channels it answers on.'
+              : 'Configure when the AI should automatically reply to incoming messages.'}
           </p>
 
+          {apiService ? (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-medium text-[var(--color-brand-text)] mb-3">Agent</h3>
+                {agents.length ? (
+                  <select
+                    aria-label="Answering agent"
+                    value={agentId}
+                    onChange={e => setAgentId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                ) : (
+                  <div className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">
+                    Create an agent in AI Playground first.
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-[var(--color-brand-text)] mb-3">Channels</h3>
+                <div className="space-y-1">
+                  {channels.map(c => (
+                    <label key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enabledIds.includes(c.id)}
+                        onChange={() => setEnabledIds(ids => ids.includes(c.id) ? ids.filter(id => id !== c.id) : [...ids, c.id])}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-[var(--color-brand-text)]">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+            </div>
+          ) : (
           <div className="space-y-6">
             {/* Active Days */}
             <div>
@@ -179,6 +252,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
               )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -191,10 +265,12 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
           </button>
           <button 
             onClick={() => {
+              if (apiService) return saveAutoReply();
               onSave();
               onClose();
             }}
-            className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg transition-colors"
+            disabled={!!apiService && !agents.length}
+            className="disabled:opacity-60 px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg transition-colors"
           >
             Enable Automation
           </button>

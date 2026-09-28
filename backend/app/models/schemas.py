@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_valida
 # Extended by later channel changes (gmail, website, ...).
 Platform = Literal["whatsapp", "instagram", "messenger"]
 ConversationStatus = Literal["open", "closed"]
+ConversationMode = Literal["ai", "human"]
 MessageType = Literal["text", "image", "video", "audio", "file", "emoji"]
 
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -71,7 +72,15 @@ class ChannelResponse(BaseModel):
     name: str
     adapter_type: str
     status: str
+    ai_enabled: bool
+    ai_agent_id: Optional[uuid.UUID] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChannelUpdate(BaseModel):
+    """AI auto-reply settings. Enabling needs an agent, either given here or already set."""
+    ai_enabled: Optional[bool] = None
+    ai_agent_id: Optional[uuid.UUID] = None
 
 
 class SimulatedInbound(BaseModel):
@@ -121,6 +130,8 @@ class ConversationResponse(BaseModel):
     unread_count: int
     last_message_at: Optional[UtcDatetime] = None
     last_message_preview: Optional[str] = None
+    mode: ConversationMode
+    needs_human: bool
     contact: ContactResponse
     model_config = ConfigDict(from_attributes=True)
 
@@ -134,6 +145,7 @@ class MessageResponse(BaseModel):
     content: str
     status: str
     external_id: Optional[str] = None
+    author: Literal["customer", "staff", "agent"]
     timestamp: UtcDatetime = Field(validation_alias="created_at")
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,7 +163,17 @@ class MessageCreate(BaseModel):
 
 
 class ConversationUpdate(BaseModel):
-    status: ConversationStatus
+    """Change status, mode, or both. Setting `mode` clears the needs-human flag."""
+    status: Optional[ConversationStatus] = None
+    mode: Optional[ConversationMode] = None
+
+
+class SuggestReplyResponse(BaseModel):
+    suggestion: str
+
+
+class SimulateCustomerRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
 
 
 # ==========================================

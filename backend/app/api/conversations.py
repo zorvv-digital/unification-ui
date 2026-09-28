@@ -14,7 +14,9 @@ from app.models.schemas import (
     MessageCreate,
     MessageResponse,
     Platform,
+    SuggestReplyResponse,
 )
+from app.services.ai_reply_service import AiReplyService
 from app.services.demo_service import DemoService
 from app.services.inbox_service import InboxService
 
@@ -25,15 +27,16 @@ router = APIRouter(prefix="/conversations", tags=["Inbox"])
 async def list_conversations(
     platform: Optional[Platform] = None,
     status_filter: Optional[ConversationStatus] = Query(None, alias="status"),
+    needs_human: Optional[bool] = None,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Lists the workspace's conversations across all platforms, newest activity first.
-    Filter with `platform` and `status` (`open` or `closed`).
+    Filter with `platform`, `status` (`open` or `closed`), and `needs_human` (escalated by the AI).
     """
     return await InboxService.list_conversations(
-        db=db, workspace_id=user.workspace_id, platform=platform, status_filter=status_filter
+        db=db, workspace_id=user.workspace_id, platform=platform, status_filter=status_filter, needs_human=needs_human
     )
 
 
@@ -59,6 +62,7 @@ async def send_message(
     """
     Sends a message to the customer through the conversation's channel.
     Check `status` in the response: `failed` means the channel did not accept it.
+    A staff message switches the conversation to `human` mode (the AI stops answering).
     In the demo workspace a simulated customer reply follows after a short delay.
     """
     message = await InboxService.send_message(
@@ -89,8 +93,23 @@ async def update_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Closes or reopens a conversation.
+    Closes or reopens a conversation (`status`) and hands it to the AI or a human (`mode`).
+    `mode: ai` needs AI auto-reply on the conversation's channel. Setting a mode clears `needs_human`.
     """
-    return await InboxService.update_status(
-        db=db, workspace_id=user.workspace_id, conversation_id=conversation_id, new_status=data.status
+    return await InboxService.update_conversation(
+        db=db, workspace_id=user.workspace_id, conversation_id=conversation_id, data=data
     )
+
+
+@router.post("/{conversation_id}/suggest-reply", response_model=SuggestReplyResponse)
+async def suggest_reply(
+    conversation_id: uuid.UUID,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Drafts a reply with the channel's agent (or the workspace's first agent). Nothing is sent or stored.
+    Returns 400 when the workspace has no agent and 502 when the AI provider fails.
+    """
+    suggestion = await AiReplyService.suggest(db=db, workspace_id=user.workspace_id, conversation_id=conversation_id)
+    return SuggestReplyResponse(suggestion=suggestion)

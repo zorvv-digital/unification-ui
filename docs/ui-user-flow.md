@@ -76,7 +76,8 @@ Reload the page: all messages you sent and received are still there, because the
 ## 7. Reset the demo
 
 Click **Reset demo data** (bottom-left) → confirm. The inbox returns to the original six conversations; Meera and
-everything you sent are gone. The AI Playground returns to the single Glow Assistant (v1) with its four knowledge items.
+everything you sent are gone. The AI Playground returns to the single Glow Assistant (v1) with its four knowledge items,
+and AI auto-reply is back on WhatsApp only.
 Use this before each demo.
 Only the demo workspace shows this button.
 
@@ -104,7 +105,31 @@ Open **AI Playground** in the sidebar.
    Answer the questions tailored to a dental clinic, optionally name it `Smiley` → **Generate agent**.
    The new agent is selected and greets you; switch between agents with the agent picker.
 
-## 9. Sign out
+## 9. AI replies in the inbox
+
+The demo WhatsApp channel has AI auto-reply on, so the **AI auto-reply** switch (robot icon, top right) is blue.
+
+1. **The AI is handling Priya.** Open **Priya Singh**. Under her name it says **AI is replying**, and the switch
+   next to the robot icon in the thread header is on.
+2. **A customer asks something.** Click **⋮** (top right of the thread) → **Simulate customer message** →
+   type `What is your pricing for a haircut?` → OK. Within a second the AI answers from the Pricing knowledge.
+   Its bubble carries a small **AI** label, and the inbox list shows `AI:` before the preview.
+3. **The customer wants a person.** Simulate `I want to talk to a real person`. The AI does not answer. Priya gets a red
+   **Needs human** pill (in the thread and the list), and the switch turns off.
+4. **Find escalations.** Click the **Needs human** filter chip above the list: only flagged conversations show. Click **All**.
+5. **Let the AI draft for you.** Click the ✨ button in the composer. A suggested reply fills the text box;
+   nothing is sent until you press Enter.
+6. **Reply yourself or hand back.** Sending a message yourself takes the conversation over (switch off, flag cleared).
+   Turning the switch back on hands it to the AI, which answers the next customer message.
+7. **Choose channels and agent.** Click the top-right **AI auto-reply** switch to turn auto-reply off everywhere.
+   Click it again: the **AI Auto-Reply** window lets you pick the agent and tick the channels
+   (e.g. only **Demo WhatsApp**) → **Enable Automation**. New customers on those channels are answered by the AI.
+
+> A new customer on WhatsApp (for example Meera in §4) is now answered by the AI straight away.
+> Replying to a customer yourself switches their conversation to you, so the simulated customer replies in §3 keep working.
+> The WhatsApp, Instagram and Messenger pages keep their own layouts. The AI controls are on the **Inbox** page.
+
+## 10. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 

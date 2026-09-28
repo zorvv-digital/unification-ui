@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Contact, Conversation, Message
-from app.models.schemas import ConversationResponse, MessageCreate, MessageResponse
+from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse
 from app.services.base import BaseService
 from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage
 from app.services.event_service import EventService
@@ -32,6 +32,7 @@ class InboxService(BaseService):
         workspace_id: uuid.UUID,
         platform: Optional[str] = None,
         status_filter: Optional[str] = None,
+        needs_human: Optional[bool] = None,
     ) -> Sequence[Conversation]:
         """
         Lists workspace conversations, most recent activity first.
@@ -41,6 +42,7 @@ class InboxService(BaseService):
             workspace_id (uuid.UUID): Caller's workspace.
             platform (Optional[str]): Only this platform when given.
             status_filter (Optional[str]): Only `open` or `closed` when given.
+            needs_human (Optional[bool]): Only conversations with this escalation flag when given.
 
         Returns:
             Sequence[Conversation]: Conversations with contact loaded.
@@ -50,6 +52,8 @@ class InboxService(BaseService):
             query = query.where(Conversation.platform == platform)
         if status_filter:
             query = query.where(Conversation.status == status_filter)
+        if needs_human is not None:
+            query = query.where(Conversation.needs_human.is_(needs_human))
         result = await db.execute(query.order_by(Conversation.last_message_at.desc().nulls_last()))
         return result.scalars().all()
 
@@ -85,23 +89,33 @@ class InboxService(BaseService):
 
     @classmethod
     async def send_message(
-        cls, db: AsyncSession, workspace_id: uuid.UUID, conversation_id: uuid.UUID, data: MessageCreate
+        cls,
+        db: AsyncSession,
+        workspace_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        data: MessageCreate,
+        author: str = "staff",
     ) -> Message:
         """
         Stores an outbound message and delivers it through the conversation's channel adapter.
         A closed conversation is reopened. A delivery failure keeps the message with status `failed`.
+        A staff message takes the conversation over: mode becomes `human` and the needs-human flag clears.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
             workspace_id (uuid.UUID): Caller's workspace.
             conversation_id (uuid.UUID): Target conversation.
             data (MessageCreate): Content and message type.
+            author (str): `staff` or `agent`.
 
         Returns:
             Message: The stored message.
         """
         conversation = await cls.get_conversation(db, workspace_id, conversation_id)
         conversation.status = "open"
+        if author == "staff":
+            conversation.mode = "human"
+            conversation.needs_human = False
         message = Message(
             workspace_id=workspace_id,
             conversation_id=conversation.id,
@@ -110,6 +124,7 @@ class InboxService(BaseService):
             type=data.type,
             content=data.content,
             status="sent",
+            author=author,
             created_at=datetime.now(timezone.utc),
         )
         try:
@@ -128,7 +143,8 @@ class InboxService(BaseService):
     async def receive_message(cls, db: AsyncSession, channel: Channel, inbound: InboundMessage) -> Optional[Message]:
         """
         Stores an inbound customer message, creating the contact and conversation on first contact.
-        A message whose channel-side id was already stored is ignored.
+        A new conversation starts in `ai` mode when its channel has auto-reply on. A message whose
+        channel-side id was already stored is ignored.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
@@ -162,6 +178,7 @@ class InboxService(BaseService):
                 contact=contact,
                 platform=channel.platform,
                 external_id=inbound.customer_id,
+                mode="ai" if channel.ai_enabled and channel.ai_agent_id else "human",
             )
             db.add_all([contact, conversation])
             await db.flush()
@@ -174,6 +191,7 @@ class InboxService(BaseService):
             type=inbound.type,
             content=inbound.content,
             status="delivered",
+            author="customer",
             external_id=inbound.message_id,
             created_at=datetime.now(timezone.utc),
         )
@@ -202,14 +220,24 @@ class InboxService(BaseService):
         return conversation
 
     @classmethod
-    async def update_status(
-        cls, db: AsyncSession, workspace_id: uuid.UUID, conversation_id: uuid.UUID, new_status: str
+    async def update_conversation(
+        cls, db: AsyncSession, workspace_id: uuid.UUID, conversation_id: uuid.UUID, data: ConversationUpdate
     ) -> Conversation:
         """
-        Closes or reopens a conversation.
+        Closes or reopens a conversation, and switches it between `ai` and `human` mode.
+        Setting a mode clears the needs-human flag.
+
+        Raises:
+            HTTPException: 400 when switching to `ai` on a channel without auto-reply.
         """
         conversation = await cls.get_conversation(db, workspace_id, conversation_id)
-        conversation.status = new_status
+        if data.mode == "ai" and not (conversation.channel.ai_enabled and conversation.channel.ai_agent_id):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enable AI auto-reply on this channel first")
+        if data.status:
+            conversation.status = data.status
+        if data.mode:
+            conversation.mode = data.mode
+            conversation.needs_human = False
         await db.commit()
         EventService.publish(workspace_id, "conversation.updated", ConversationResponse.model_validate(conversation))
         return conversation

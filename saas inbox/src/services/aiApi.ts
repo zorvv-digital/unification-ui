@@ -55,6 +55,14 @@ export interface ProfilerField {
   is_required: boolean;
 }
 
+export interface Channel {
+  id: string;
+  platform: string;
+  name: string;
+  ai_enabled: boolean;
+  ai_agent_id: string | null;
+}
+
 export interface AgentSetup {
   agent_name?: string;
   personality?: string;
@@ -91,6 +99,15 @@ export const aiApi = {
     post<KnowledgeItem>('/knowledge', item),
   updateKnowledge: (id: string, changes: Partial<KnowledgeItem>) =>
     api().request<KnowledgeItem>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  // Inbox AI replies
+  listChannels: () => api().request<Channel[]>('/channels'),
+  updateChannel: (id: string, changes: { ai_enabled?: boolean; ai_agent_id?: string }) =>
+    api().request<Channel>(`/channels/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  setConversationMode: (id: string, mode: 'ai' | 'human') =>
+    api().request<unknown>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify({ mode }) }),
+  suggestReply: (id: string) => post<{ suggestion: string }>(`/conversations/${id}/suggest-reply`),
+  simulateCustomer: (id: string, content: string) => post<unknown>(`/demo/conversations/${id}/simulate`, { content }),
+
   attach: (agentId: string, itemId: string) => post<void>(`/agents/${agentId}/knowledge/${itemId}`),
   detach: (agentId: string, itemId: string) =>
     api().request<void>(`/agents/${agentId}/knowledge/${itemId}`, { method: 'DELETE' }),

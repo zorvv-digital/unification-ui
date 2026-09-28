@@ -92,8 +92,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   </div>
                   <div className="flex justify-between items-center">
                     <p className={`text-[13px] truncate ${conv.unreadCount > 0 ? 'text-[var(--color-brand-text)] font-medium' : 'text-gray-500'}`}>
-                      {lastMsg?.direction === 'outbound' ? 'You: ' : ''}{lastMsg?.content || 'Attachment'}
+                      {lastMsg?.author === 'agent' ? 'AI: ' : lastMsg?.direction === 'outbound' ? 'You: ' : ''}{lastMsg?.content || 'Attachment'}
                     </p>
+                    {conv.needsHuman && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 ml-2 shrink-0">Needs human</span>
+                    )}
                     {conv.unreadCount > 0 && (
                       <div className="bg-gray-900 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shrink-0 min-w-[20px] text-center">
                         {conv.unreadCount}

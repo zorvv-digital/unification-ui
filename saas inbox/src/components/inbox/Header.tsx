@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Bell, HelpCircle, Menu, Bot } from 'lucide-react';
 import { AiScheduleModal } from './AiScheduleModal';
 import { Avatar } from '../messaging/Avatar';
+import { apiService } from '../../context/MessagingContext';
+import { aiApi } from '../../services/aiApi';
+
+// On when any channel has AI auto-reply.
+const loadAutoReply = () => aiApi.listChannels().then(channels => channels.some(c => c.ai_enabled));
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;
@@ -19,12 +24,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [isAiEnabled, setIsAiEnabled] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleToggle = () => {
-    if (isAiEnabled) {
-      setIsAiEnabled(false);
-    } else {
-      setIsModalOpen(true);
+  useEffect(() => {
+    if (apiService) loadAutoReply().then(setIsAiEnabled).catch(() => {});
+  }, []);
+
+  const handleToggle = async () => {
+    if (!isAiEnabled) return setIsModalOpen(true);
+    if (apiService) {
+      const channels = await aiApi.listChannels();
+      await Promise.all(channels.filter(c => c.ai_enabled).map(c => aiApi.updateChannel(c.id, { ai_enabled: false })));
     }
+    setIsAiEnabled(false);
   };
 
   return (
@@ -67,6 +77,8 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2 mr-2" title="Global AI Automation">
           <Bot size={18} className={isAiEnabled ? "text-blue-600" : "text-gray-400"} />
           <button 
+            aria-label="AI auto-reply"
+            aria-pressed={isAiEnabled}
             className={`w-9 h-5 rounded-full p-0.5 transition-colors ${isAiEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
             onClick={handleToggle}
           >
@@ -89,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
       <AiScheduleModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSave={() => setIsAiEnabled(true)} 
+        onSave={() => apiService ? loadAutoReply().then(setIsAiEnabled) : setIsAiEnabled(true)}
       />
     </header>
   );

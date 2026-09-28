@@ -28,7 +28,7 @@ The demo user's email and password SHALL be configurable, and the demo user SHAL
 - **THEN** the client receives a token for the demo workspace
 
 ### Requirement: Simulated customer replies
-In the demo workspace, the system SHALL generate a customer reply shortly after each outbound message, delivered as a normal inbound message including live events.
+In the demo workspace, the system SHALL generate a customer reply shortly after each outbound message sent by a staff member, delivered as a normal inbound message including live events. Outbound messages authored by an AI agent SHALL NOT trigger a simulated customer reply.
 
 #### Scenario: Reply after sending
 - **WHEN** a demo user sends a message in a demo conversation
@@ -37,6 +37,10 @@ In the demo workspace, the system SHALL generate a customer reply shortly after 
 #### Scenario: Non-demo workspaces
 - **WHEN** a user in a non-demo workspace sends a message
 - **THEN** no simulated reply is generated
+
+#### Scenario: AI reply does not trigger simulation
+- **WHEN** an AI agent replies in a demo conversation
+- **THEN** no simulated customer reply is generated
 
 ### Requirement: Demo reset
 The system SHALL let a user of the demo workspace reset it to its seeded state, discarding all changes made since seeding.
@@ -48,3 +52,14 @@ The system SHALL let a user of the demo workspace reset it to its seeded state, 
 #### Scenario: Reset outside demo
 - **WHEN** a user of a non-demo workspace requests a demo reset
 - **THEN** the system returns a 403 error and changes nothing
+
+### Requirement: Simulate customer message
+The system SHALL let a demo workspace user post a message as if it came from a chosen demo contact, so AI replies can be demonstrated.
+
+#### Scenario: Simulate inbound
+- **WHEN** a demo user simulates "Do you open on Sunday?" from a demo contact
+- **THEN** the message arrives as an inbound message on that contact's conversation, exactly as a real customer message would
+
+#### Scenario: Outside demo
+- **WHEN** a non-demo workspace user calls the simulate action
+- **THEN** the system returns a 403 error and stores nothing

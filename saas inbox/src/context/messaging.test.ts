@@ -49,28 +49,35 @@ describe('messagingReducer', () => {
     expect(next.conversations).toEqual([conversation('a', 100, 0)]);
     expect(next.contacts).toHaveLength(1);
   });
+
+  it('applies an AI escalation from the server (mode and needs-human flag)', () => {
+    const start = state({ conversations: [{ ...conversation('a', 100), mode: 'ai', needsHuman: false }] });
+    const escalated = { ...conversation('a', 100), mode: 'human' as const, needsHuman: true };
+    const next = messagingReducer(start, { type: 'CONVERSATION_UPDATED', payload: { conversation: escalated } });
+    expect(next.conversations[0]).toMatchObject({ mode: 'human', needsHuman: true });
+  });
 });
 
 describe('API mapping', () => {
   const apiConversation: ApiConversation = {
     id: 'c1', platform: 'instagram', channel_id: 'ch1', external_id: 'ig_sarah', status: 'open', unread_count: 2,
-    last_message_at: '2026-09-28T10:00:00+00:00',
+    last_message_at: '2026-09-28T10:00:00+00:00', mode: 'ai', needs_human: true,
     contact: { id: 'p1', name: 'Sarah', username: '@sarah', avatar: null, phone: null, email: 'sarah@x.com' },
   };
 
   it('maps conversations to camelCase with epoch timestamps', () => {
     expect(toConversation(apiConversation)).toEqual({
       id: 'c1', platform: 'instagram', contactId: 'p1', channelId: 'ch1', externalId: 'ig_sarah',
-      lastMessageAt: Date.UTC(2026, 8, 28, 10), unreadCount: 2, status: 'open',
+      lastMessageAt: Date.UTC(2026, 8, 28, 10), unreadCount: 2, status: 'open', mode: 'ai', needsHuman: true,
     });
   });
 
   it('maps messages, marking outbound as sent by "me"', () => {
     const api: ApiMessage = {
       id: 'm1', conversation_id: 'c1', platform: 'instagram', direction: 'outbound', type: 'text',
-      content: 'Hello', status: 'sent', external_id: 'sim-1', timestamp: '2026-09-28T10:00:00+00:00',
+      content: 'Hello', status: 'sent', external_id: 'sim-1', author: 'agent', timestamp: '2026-09-28T10:00:00+00:00',
     };
-    expect(toMessage(api)).toMatchObject({ senderId: 'me', timestamp: Date.UTC(2026, 8, 28, 10), externalId: 'sim-1' });
+    expect(toMessage(api)).toMatchObject({ senderId: 'me', timestamp: Date.UTC(2026, 8, 28, 10), externalId: 'sim-1', author: 'agent' });
     expect(toMessage({ ...api, direction: 'inbound' }).senderId).not.toBe('me');
   });
 });

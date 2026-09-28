@@ -15,6 +15,7 @@ Open **http://localhost:8000/docs**.
 
 > To start from a clean database, stop the server, delete `backend/unification.db*`, and start it again.
 > The demo workspace is created automatically on startup.
+> New columns are not migrated: after pulling a change that adds database fields, delete `backend/unification.db*` once.
 
 ---
 
@@ -69,6 +70,7 @@ Re-authorize with the demo token before continuing.
 
 `GET /api/v1/channels` → Execute.
 Expect three channels, `whatsapp`, `instagram`, `messenger`, all `adapter_type: "simulated"`, `status: "connected"`, and **no `config` field**.
+WhatsApp has `ai_enabled: true` with the demo agent as `ai_agent_id`; the others have `ai_enabled: false` (see §10).
 **Copy the `id` of the WhatsApp channel** (CHANNEL_ID).
 
 ---
@@ -258,3 +260,56 @@ These endpoints are under the **AI Agents** and **Knowledge** tags. Stay authori
 ### 9.7 Demo reset restores the AI setup
 `POST /demo/reset` restores the seeded agent (version 1 only) and the 4 knowledge items; agents and items you created are removed.
 The agent gets a **new id** after a reset, so run `GET /agents` again.
+
+---
+
+## 10. AI replies in the inbox
+
+Stay authorized as the demo user. The demo WhatsApp channel has AI auto-reply on with **Glow Assistant**, and
+**Priya Singh**'s conversation is in `ai` mode. Conversations now show `mode` (`ai` or `human`) and `needs_human`;
+messages show `author` (`customer`, `staff`, or `agent`). Start from a fresh `POST /demo/reset`.
+
+### 10.1 Auto-reply settings per channel
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| See settings | `GET /channels` | none | WhatsApp `ai_enabled: true`, `ai_agent_id` = AGENT_ID (from `GET /agents`) |
+| Turn off | `PATCH /channels/{CHANNEL_ID}` | `{"ai_enabled": false}` | `200`, `ai_enabled: false` |
+| Turn on | `PATCH /channels/{CHANNEL_ID}` | `{"ai_enabled": true, "ai_agent_id": "<AGENT_ID>"}` | `200`, `ai_enabled: true` |
+| Instagram without agent | `PATCH /channels/{INSTAGRAM_ID}` | `{"ai_enabled": true}` | `400` "Choose an agent to enable AI auto-reply" |
+| Another workspace's agent | `PATCH /channels/{CHANNEL_ID}` | `{"ai_agent_id": "<agent id from TOKEN_B>"}` | `404` |
+
+### 10.2 The AI answers a new customer
+1. `POST /webhooks/{CHANNEL_ID}` (no token) with
+   `{"customer_id": "+919900055566", "name": "Kavya", "content": "What is your pricing for a haircut?"}` → `200`.
+2. `GET /conversations`: **Kavya** is at the top with `mode: "ai"`.
+3. `GET /conversations/{id}/messages`: her question (`author: "customer"`) followed by the agent's answer
+   (`direction: "outbound"`, `author: "agent"`) containing the Pricing knowledge.
+4. Send another webhook message from the same `customer_id`: it is answered too, using the earlier messages as context.
+
+### 10.3 Staff take over, then hand back
+1. `POST /conversations/{id}/messages` `{"content": "Hi Kavya, this is Anu from Glow!"}` → `author: "staff"`.
+   The conversation is now `mode: "human"`.
+2. Another webhook message from Kavya → stored, **no AI reply**.
+3. `PATCH /conversations/{id}` `{"mode": "ai"}` → `200`, `mode: "ai"`. The next webhook message gets an AI reply again.
+4. `PATCH /conversations/{id}` `{"mode": "ai"}` on an **Instagram** conversation (channel without auto-reply) → `400`.
+
+### 10.4 Escalation
+| Customer writes (webhook, `ai` mode) | Expect |
+|---|---|
+| `I want to talk to a real person` | no reply; conversation `mode: "human"`, `needs_human: true` |
+| anything while the AI provider is down (`LLM_PROVIDER=openai` with a bad key) | same: no reply, flagged `needs_human` |
+
+- `GET /conversations?needs_human=true` lists only flagged conversations.
+- A staff reply, or `PATCH` with any `mode`, clears `needs_human`.
+
+### 10.5 Suggested reply
+- `POST /conversations/{id}/suggest-reply` → `200` `{"suggestion": "..."}`. `GET .../messages` is unchanged: nothing is sent or stored.
+- Works in any mode. It uses the channel's agent, or the workspace's first agent.
+- A workspace with no agents (TOKEN_B) → `400` "Create an AI agent first". Provider down → `502`.
+
+### 10.6 Demo: simulate a customer
+- `POST /demo/conversations/{PRIYA_ID}/simulate` `{"content": "Do you open on Sunday?"}` → `201`, the inbound message
+  (`author: "customer"`). Priya is in `ai` mode, so the agent's answer follows right away.
+  AI answers never trigger the demo's simulated customer replies, so there is no AI ↔ customer loop.
+- Same call with TOKEN_B → `403`.
+- `POST /demo/reset` restores WhatsApp auto-reply (with the recreated agent) and Priya's `ai` mode.

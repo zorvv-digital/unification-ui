@@ -146,6 +146,7 @@ export default function UnifiedInbox() {
     else if (activeFilter === 'messenger') result = result.filter(c => c.platform === 'messenger');
     else if (activeFilter === 'gmail') result = result.filter(c => c.platform === 'gmail');
     else if (activeFilter === 'unread') result = result.filter(c => c.unreadCount > 0);
+    else if (activeFilter === 'needs-human') result = result.filter(c => c.needsHuman);
     else if (activeFilter === 'assigned') result = result.filter(() => false); // Mock assigned to me
     
     // 2. Apply Search

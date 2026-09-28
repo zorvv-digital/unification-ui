@@ -88,13 +88,92 @@ await step('8. data survives a reload (it lives in the backend)', async () => {
   await page.getByText('Simulated incoming message').first().waitFor();
 });
 
+// --- AI replies in the inbox (add-ai-replies) ---
+const aiSwitch = () => page.getByLabel('AI replies for this conversation');
+const waitPressed = (label, value) => page.waitForFunction(
+  ([l, v]) => document.querySelector(`[aria-label="${l}"]`)?.getAttribute('aria-pressed') === v, [label, value]);
+const simulateCustomer = async text => {
+  page.once('dialog', d => d.accept(text));
+  await page.getByLabel('More options').click();
+  await page.getByText('Simulate customer message').click();
+};
+const priyaMessages = async () => {
+  const priya = (await api('/conversations', {}, token)).find(c => c.contact.name === 'Priya Singh');
+  return api(`/conversations/${priya.id}/messages`, {}, token);
+};
+
+await step('A1. WhatsApp auto-reply is on and Priya is handled by the AI', async () => {
+  await page.goto(`${UI}/inbox`);
+  await waitPressed('AI auto-reply', 'true');
+  await page.getByText('Priya Singh').first().click();
+  await page.getByText('AI is replying').waitFor();
+  await waitPressed('AI replies for this conversation', 'true');
+});
+
+await step('A2. a customer question gets an AI answer from the knowledge', async () => {
+  await simulateCustomer('What is your pricing for a haircut?');
+  await page.getByText('Haircut: 500 INR').first().waitFor({ timeout: 10000 });
+  assert.equal((await priyaMessages()).at(-1).author, 'agent');
+  await page.screenshot({ path: SHOTS + 'A2-ai-reply.png' });
+});
+
+await step('A3. asking for a person escalates to a human', async () => {
+  await simulateCustomer('I want to talk to a real person');
+  await page.getByText('Needs human').first().waitFor({ timeout: 5000 });
+  await waitPressed('AI replies for this conversation', 'false');
+  assert.equal((await priyaMessages()).at(-1).author, 'customer');
+  await page.screenshot({ path: SHOTS + 'A3-needs-human.png' });
+});
+
+await step('A4. the Needs human filter shows only escalated conversations', async () => {
+  await page.getByRole('button', { name: 'Needs human', exact: true }).click();
+  await page.waitForFunction(() => !document.body.innerText.includes('Rahul Kumar'));
+  await page.getByText('Priya Singh').first().waitFor();
+  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await page.getByText('Rahul Kumar').first().waitFor();
+});
+
+await step('A5. suggest reply fills the composer without sending', async () => {
+  const before = (await priyaMessages()).length;
+  await page.getByLabel('Suggest reply').click();
+  await page.waitForFunction(() => document.querySelector('textarea[placeholder="Type a message..."]')?.value.length > 0, null, { timeout: 10000 });
+  assert.equal((await priyaMessages()).length, before);
+  await page.fill('textarea[placeholder="Type a message..."]', '');
+});
+
+await step('A6. handing back to the AI clears the flag', async () => {
+  await aiSwitch().click();
+  await page.getByText('AI is replying').waitFor();
+  await page.locator('span:text-is("Needs human")').first().waitFor({ state: 'detached' });
+  const priya = (await api('/conversations', {}, token)).find(c => c.contact.name === 'Priya Singh');
+  assert.deepEqual([priya.mode, priya.needs_human], ['ai', false]);
+});
+
+await step('A7. the header switch turns auto-reply off and back on per channel', async () => {
+  await page.getByLabel('AI auto-reply').click();
+  await waitPressed('AI auto-reply', 'false');
+  assert.ok((await api('/channels', {}, token)).every(c => !c.ai_enabled));
+  await page.getByLabel('AI auto-reply').click();
+  await page.getByText('AI Auto-Reply').waitFor();
+  await page.getByLabel('Answering agent').filter({ hasText: 'Glow Assistant' }).waitFor();
+  await page.getByLabel('Demo Instagram').uncheck();
+  await page.getByLabel('Demo Messenger').uncheck();
+  await page.screenshot({ path: SHOTS + 'A7-auto-reply.png' });
+  await page.getByText('Enable Automation').click();
+  await waitPressed('AI auto-reply', 'true');
+  const channels = await api('/channels', {}, token);
+  assert.deepEqual(channels.filter(c => c.ai_enabled).map(c => c.platform), ['whatsapp']);
+});
+
 // --- AI playground (add-ai-agents) ---
 const chat = async text => {
-  const before = await page.locator('.bg-white.rounded-tl-none').count();
+  const before = await page.locator('.bg-white.rounded-tl-none').filter({ hasText: /\S/ }).count();
   await page.getByPlaceholder('Message', { exact: true }).fill(text);
   await page.keyboard.press('Enter');
-  await page.waitForFunction(n => document.querySelectorAll('.bg-white.rounded-tl-none').length > n, before, { timeout: 10000 });
-  return page.locator('.bg-white.rounded-tl-none').last().innerText();
+  // The typing indicator shares the bubble class, so wait for a new bubble with text.
+  const replies = () => [...document.querySelectorAll('.bg-white.rounded-tl-none')].filter(b => b.innerText.trim());
+  await page.waitForFunction(`(${replies})().length > ${before}`, null, { timeout: 10000 });
+  return page.evaluate(`(${replies})().at(-1).innerText`);
 };
 
 await step('P1. playground opens the seeded demo agent with its greeting', async () => {

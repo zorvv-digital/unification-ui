@@ -71,7 +71,8 @@ class DemoService(BaseService):
     @classmethod
     async def reset(cls, db: AsyncSession, workspace: Workspace) -> None:
         """
-        Restores the demo workspace's contacts, conversations, messages, agent, and knowledge to the seed state.
+        Restores the demo workspace's contacts, conversations, messages, agent, knowledge, and auto-reply settings
+        to the seed state.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
@@ -92,6 +93,21 @@ class DemoService(BaseService):
         await cls._seed_conversations(db, workspace.id, seed)
         await cls._seed_ai(db, workspace.id, seed)
         await db.commit()
+
+    @classmethod
+    async def simulate_customer(cls, db: AsyncSession, workspace: Workspace, conversation_id: uuid.UUID, content: str) -> Message:
+        """
+        Stores a message as if the conversation's customer sent it through the channel.
+
+        Raises:
+            HTTPException: 403 outside the demo workspace, 404 for an unknown conversation.
+        """
+        if not workspace.is_demo:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the demo workspace can simulate customers")
+        conversation = await InboxService.get_conversation(db, workspace.id, conversation_id)
+        return await InboxService.receive_message(
+            db, conversation.channel, InboundMessage(customer_id=conversation.external_id, content=content)
+        )
 
     @classmethod
     def schedule_reply(cls, conversation_id: uuid.UUID) -> None:
@@ -136,6 +152,7 @@ class DemoService(BaseService):
                 platform=channel.platform,
                 external_id=item["customer_id"],
                 status=item.get("status", "open"),
+                mode=item.get("mode", "human"),
             )
             db.add_all([contact, conversation])
             await db.flush()
@@ -176,3 +193,8 @@ class DemoService(BaseService):
             source="generated",
         ))
         db.add_all(AgentKnowledge(agent_id=agent.id, knowledge_item_id=item.id) for item in items)
+
+        channels = await db.execute(select(Channel).where(Channel.workspace_id == workspace_id))
+        for channel in channels.scalars().all():
+            channel.ai_enabled = channel.platform in spec["auto_reply_platforms"]
+            channel.ai_agent_id = agent.id if channel.ai_enabled else None

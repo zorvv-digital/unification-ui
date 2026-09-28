@@ -2,11 +2,12 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Channel, Conversation, Message
-from app.models.schemas import SimulatedInbound
+from app.db.models import Agent, Channel, Conversation, Message
+from app.models.schemas import ChannelUpdate, SimulatedInbound
 from app.services.base import BaseService
 
 
@@ -81,3 +82,36 @@ class ChannelService(BaseService):
         """
         result = await db.execute(select(Channel).where(Channel.id == channel_id))
         return result.scalars().first()
+
+    @classmethod
+    async def update_settings(cls, db: AsyncSession, workspace_id: uuid.UUID, channel_id: uuid.UUID, data: ChannelUpdate) -> Channel:
+        """
+        Updates a channel's AI auto-reply settings.
+
+        Args:
+            db (AsyncSession): Active asynchronous database session.
+            workspace_id (uuid.UUID): Caller's workspace.
+            channel_id (uuid.UUID): Channel to update.
+            data (ChannelUpdate): Fields to change.
+
+        Returns:
+            Channel: The updated channel.
+
+        Raises:
+            HTTPException: 404 for a channel or agent outside the workspace, 400 when enabling without an agent.
+        """
+        result = await db.execute(select(Channel).where(Channel.id == channel_id, Channel.workspace_id == workspace_id))
+        channel = result.scalars().first()
+        if not channel:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        if data.ai_agent_id:
+            agent = await db.execute(select(Agent.id).where(Agent.id == data.ai_agent_id, Agent.workspace_id == workspace_id))
+            if not agent.first():
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+            channel.ai_agent_id = data.ai_agent_id
+        if data.ai_enabled is not None:
+            if data.ai_enabled and not channel.ai_agent_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose an agent to enable AI auto-reply")
+            channel.ai_enabled = data.ai_enabled
+        await db.commit()
+        return channel

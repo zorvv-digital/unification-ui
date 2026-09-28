@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type FilterType = 'all' | 'whatsapp' | 'instagram' | 'messenger' | 'gmail' | 'unread' | 'assigned';
+export type FilterType = 'all' | 'whatsapp' | 'instagram' | 'messenger' | 'gmail' | 'unread' | 'needs-human' | 'assigned';
 export type SortType = 'latest' | 'oldest' | 'unread-first';
 
 interface FilterBarProps {
@@ -23,6 +23,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     { id: 'messenger', label: 'Messenger' },
     { id: 'gmail', label: 'Gmail' },
     { id: 'unread', label: 'Unread' },
+    { id: 'needs-human', label: 'Needs human' },
     { id: 'assigned', label: 'Assigned to me' },
   ];
 

@@ -54,6 +54,8 @@ class Channel(BaseModelMixin):
     adapter_type: Mapped[str] = mapped_column(String(30), nullable=False, default="simulated")
     config: Mapped[Any] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="connected")
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ai_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
 
 
 class Contact(BaseModelMixin):
@@ -70,6 +72,7 @@ class Contact(BaseModelMixin):
 class Conversation(BaseModelMixin):
     """
     One customer's thread on one channel. `external_id` is the customer's id on that channel.
+    In `ai` mode the channel's agent answers inbound messages; `needs_human` flags an escalation.
     """
     __tablename__ = "conversations"
     __table_args__ = (UniqueConstraint("channel_id", "external_id"),)
@@ -83,6 +86,8 @@ class Conversation(BaseModelMixin):
     unread_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_message_preview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    mode: Mapped[str] = mapped_column(String(10), nullable=False, default="human")
+    needs_human: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     contact: Mapped["Contact"] = relationship("Contact", lazy="joined")
     channel: Mapped["Channel"] = relationship("Channel", lazy="joined")
@@ -103,6 +108,7 @@ class Message(BaseModelMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="sent")
     external_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    author: Mapped[str] = mapped_column(String(10), nullable=False, default="staff")
 
 
 class Agent(BaseModelMixin):

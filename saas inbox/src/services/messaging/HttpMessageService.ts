@@ -26,6 +26,8 @@ export interface ApiConversation {
   status: 'open' | 'closed';
   unread_count: number;
   last_message_at: string | null;
+  mode: 'ai' | 'human';
+  needs_human: boolean;
   contact: ApiContact;
 }
 
@@ -38,6 +40,7 @@ export interface ApiMessage {
   content: string;
   status: string;
   external_id: string | null;
+  author: 'customer' | 'staff' | 'agent';
   timestamp: string;
 }
 
@@ -68,6 +71,8 @@ export const toConversation = (c: ApiConversation): Conversation => ({
   lastMessageAt: c.last_message_at ? Date.parse(c.last_message_at) : 0,
   unreadCount: c.unread_count,
   status: c.status,
+  mode: c.mode,
+  needsHuman: c.needs_human,
 });
 
 // Inbound messages are grouped by sender in the UI, so any stable non-'me' id works.
@@ -82,6 +87,7 @@ export const toMessage = (m: ApiMessage): Message => ({
   timestamp: Date.parse(m.timestamp),
   direction: m.direction,
   status: m.status,
+  author: m.author,
 });
 
 export class HttpMessageService implements MessageService {

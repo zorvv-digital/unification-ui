@@ -11,6 +11,7 @@ export interface Contact {
 }
 
 export type ConversationStatus = 'open' | 'closed';
+export type ConversationMode = 'ai' | 'human';
 
 export interface Conversation {
   id: string;
@@ -22,6 +23,8 @@ export interface Conversation {
   lastMessageAt: number;
   unreadCount: number;
   status: ConversationStatus;
+  mode?: ConversationMode;
+  needsHuman?: boolean;
 }
 
 export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'emoji';
@@ -38,4 +41,5 @@ export interface Message {
   timestamp: number;
   direction: MessageDirection;
   status?: string;
+  author?: 'customer' | 'staff' | 'agent';
 }
