@@ -142,9 +142,14 @@ export class HttpMessageService implements MessageService {
   }
 
   /** Opens the live event stream; returns it so the caller can close it. */
-  subscribe(handlers: { onMessage: (m: Message) => void; onConversation: (c: Conversation, contact: Contact) => void }): EventSource {
+  subscribe(handlers: {
+    onMessage: (m: Message) => void;
+    onMessageUpdated: (m: Message) => void;
+    onConversation: (c: Conversation, contact: Contact) => void;
+  }): EventSource {
     const source = new EventSource(`${this.baseUrl}/events?token=${encodeURIComponent(getToken() ?? '')}`);
     source.addEventListener('message.created', e => handlers.onMessage(toMessage(JSON.parse((e as MessageEvent).data))));
+    source.addEventListener('message.updated', e => handlers.onMessageUpdated(toMessage(JSON.parse((e as MessageEvent).data))));
     source.addEventListener('conversation.updated', e => {
       const c: ApiConversation = JSON.parse((e as MessageEvent).data);
       handlers.onConversation(toConversation(c), toContact(c.contact));

@@ -4,9 +4,10 @@ import { AiScheduleModal } from './AiScheduleModal';
 import { Avatar } from '../messaging/Avatar';
 import { apiService } from '../../context/MessagingContext';
 import { aiApi } from '../../services/aiApi';
+import { channelApi } from '../../services/channelApi';
 
 // On when any channel has AI auto-reply.
-const loadAutoReply = () => aiApi.listChannels().then(channels => channels.some(c => c.ai_enabled));
+const loadAutoReply = () => channelApi.listChannels().then(channels => channels.some(c => c.ai_enabled));
 
 interface HeaderProps {
   onOpenMobileSidebar: () => void;
@@ -31,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleToggle = async () => {
     if (!isAiEnabled) return setIsModalOpen(true);
     if (apiService) {
-      const channels = await aiApi.listChannels();
+      const channels = await channelApi.listChannels();
       await Promise.all(channels.filter(c => c.ai_enabled).map(c => aiApi.updateChannel(c.id, { ai_enabled: false })));
     }
     setIsAiEnabled(false);

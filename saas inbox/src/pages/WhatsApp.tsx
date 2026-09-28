@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MoreVertical, Plus, Send, CheckCheck } from 'lucide-react';
-import { useMessaging } from '../context/MessagingContext';
+import { Search, MoreVertical, Plus, Send, CheckCheck, FileText } from 'lucide-react';
+import { apiService, useMessaging } from '../context/MessagingContext';
 import { Avatar } from '../components/messaging/Avatar';
+import { WhatsAppNumbersModal } from '../components/channels/WhatsAppNumbersModal';
+import { SendTemplateModal } from '../components/channels/SendTemplateModal';
+import { channelApi, type Channel } from '../services/channelApi';
 
 export default function WhatsApp() {
   const { getConversations, getMessages, contacts, sendMessage, receiveMessage, markAsRead } = useMessaging();
-  
+
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
-  
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [numbersOpen, setNumbersOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [sendError, setSendError] = useState('');
+
   const conversations = getConversations('whatsapp');
   const activeMessages = activeConversationId ? getMessages(activeConversationId) : [];
-  
+
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeContact = activeConversation ? contacts.find(c => c.id === activeConversation.contactId) : null;
+  // Real (Cloud API) numbers get templates; the demo's simulated number keeps "Simulate Reply".
+  const isCloudNumber = channels.find(c => c.id === activeConversation?.channelId)?.adapter_type === 'whatsapp';
+
+  const loadChannels = () => apiService && channelApi.listChannels().then(setChannels).catch(() => {});
+  useEffect(() => { loadChannels(); }, []);
+  useEffect(() => setSendError(''), [activeConversationId]);
 
   useEffect(() => {
     if (activeConversationId) {
@@ -23,8 +36,13 @@ export default function WhatsApp() {
 
   const handleSend = async () => {
     if (messageText.trim() && activeConversationId) {
-      await sendMessage(activeConversationId, messageText.trim(), 'text');
-      setMessageText('');
+      try {
+        await sendMessage(activeConversationId, messageText.trim(), 'text');
+        setMessageText('');
+        setSendError('');
+      } catch (err) {
+        setSendError(err instanceof Error ? err.message : 'Could not send');
+      }
     }
   };
 
@@ -49,7 +67,14 @@ export default function WhatsApp() {
           <h1 className="text-xl font-bold">WhatsApp Chats</h1>
           <div className="flex gap-2 text-[#54656f]">
             <button className="p-2 hover:bg-gray-200 rounded-full"><Plus size={20} /></button>
-            <button className="p-2 hover:bg-gray-200 rounded-full"><MoreVertical size={20} /></button>
+            <button
+              aria-label="WhatsApp numbers"
+              title="WhatsApp numbers"
+              onClick={() => apiService && setNumbersOpen(true)}
+              className="p-2 hover:bg-gray-200 rounded-full"
+            >
+              <MoreVertical size={20} />
+            </button>
           </div>
         </div>
         
@@ -112,9 +137,11 @@ export default function WhatsApp() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleReceiveSimulated} className="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50">
-                  Simulate Reply
-                </button>
+                {!isCloudNumber && (
+                  <button onClick={handleReceiveSimulated} className="px-3 py-1 bg-white border border-gray-300 rounded text-sm hover:bg-gray-50">
+                    Simulate Reply
+                  </button>
+                )}
               </div>
             </div>
 
@@ -139,7 +166,21 @@ export default function WhatsApp() {
               })}
             </div>
 
+            {sendError && (
+              <div role="alert" className="bg-[#fff4e5] border-t border-[#ffd8a8] px-4 py-2 text-sm text-[#8a4b00] flex items-center justify-between gap-3 z-10">
+                <span>{sendError}</span>
+                {isCloudNumber && (
+                  <button onClick={() => setTemplateOpen(true)} className="shrink-0 font-medium text-[#00a884] hover:underline">Send template</button>
+                )}
+              </div>
+            )}
+
             <div className="bg-[#f0f2f5] px-4 py-3 flex items-center gap-3 z-10">
+              {isCloudNumber && (
+                <button onClick={() => setTemplateOpen(true)} aria-label="Send template" title="Send template" className="p-2 text-[#54656f] hover:bg-gray-200 rounded-full">
+                  <FileText size={20} />
+                </button>
+              )}
               <div className="flex-1 bg-white rounded-lg flex items-center shadow-sm px-2">
                 <input
                   type="text"
@@ -168,6 +209,15 @@ export default function WhatsApp() {
           </div>
         )}
       </div>
+
+      {numbersOpen && <WhatsAppNumbersModal onClose={() => setNumbersOpen(false)} onChanged={loadChannels} />}
+      {templateOpen && activeConversation?.channelId && (
+        <SendTemplateModal
+          channelId={activeConversation.channelId}
+          conversationId={activeConversation.id}
+          onClose={() => { setTemplateOpen(false); setSendError(''); }}
+        />
+      )}
     </div>
   );
 }

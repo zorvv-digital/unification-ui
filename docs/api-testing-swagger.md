@@ -313,3 +313,67 @@ messages show `author` (`customer`, `staff`, or `agent`). Start from a fresh `PO
   AI answers never trigger the demo's simulated customer replies, so there is no AI ↔ customer loop.
 - Same call with TOKEN_B → `403`.
 - `POST /demo/reset` restores WhatsApp auto-reply (with the recreated agent) and Priya's `ai` mode.
+
+---
+
+## 11. WhatsApp Cloud API
+
+Connect a real WhatsApp Business number. You need an app in **Meta for Developers** with the WhatsApp product:
+- **WhatsApp → API Setup** gives the *Phone number ID*, the *WhatsApp Business Account ID* and a (temporary or system-user) *access token*.
+- **App settings → Basic** gives the *App secret*.
+
+Meta must reach your server for webhooks. In development, expose port 8000 (e.g. `ngrok http 8000`) and set
+`PUBLIC_BASE_URL=https://<your-ngrok-host>` in `backend/.env`, then restart.
+
+> **No Meta account?** Every call below can be tried against a stand-in. `npm run e2e` starts a mock Graph API on
+> port 8765 that accepts the access token `e2e-good-token`. Start the backend with
+> `META_GRAPH_URL=http://127.0.0.1:8765` and keep the E2E mock running, or use the automated tests (`tests/test_whatsapp.py`).
+
+### 11.1 Connect
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Connect | `POST /channels/whatsapp` | `{"phone_number_id": "...", "waba_id": "...", "access_token": "...", "app_secret": "..."}` | `201`, `adapter_type: "whatsapp"`, `status: "connected"`, a `webhook_url` and a `verify_token`. Copy the `id` (WA_ID) |
+| Wrong token | same with a bad `access_token` | | `400` "Meta rejected these credentials: ...", nothing saved |
+| Webhook values again | `GET /channels/{WA_ID}/webhook` | none | same `webhook_url` and `verify_token` |
+| Channel list | `GET /channels` | none | the new channel; no token or secret anywhere in the response |
+
+Then in the Meta App Dashboard: **WhatsApp → Configuration → Webhook → Edit**, paste the webhook URL and verify token,
+**Verify and save**, and subscribe to the **messages** field. Meta calls `GET /webhooks/{WA_ID}` to verify:
+
+| Request | Expect |
+|---|---|
+| `GET /webhooks/{WA_ID}?hub.mode=subscribe&hub.verify_token=<verify_token>&hub.challenge=123` | `200`, body `123` |
+| same with a wrong `hub.verify_token` | `403` |
+
+### 11.2 Receive
+Send a WhatsApp message to your business number from your phone. It appears in `GET /conversations` with
+`platform: "whatsapp"`, `external_id` = your number, and your WhatsApp profile name. Photos, audio, video and documents
+arrive with their type and caption (e.g. `[document]` without one).
+
+Posting to `POST /webhooks/{WA_ID}` from Swagger returns `401`: real WhatsApp events must carry Meta's
+`X-Hub-Signature-256` signature, computed with the app secret.
+
+### 11.3 Send and delivery status
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Reply | `POST /conversations/{id}/messages` | `{"content": "Hello from the inbox!"}` | `201`, `status: "sent"`, `external_id` starting with `wamid.`; the message arrives on your phone |
+| Media | same | `{"content": "https://.../menu.jpg", "type": "image"}` | sent as an image (`file` is sent as a document) |
+| Read it | read the message on your phone | | Meta reports statuses; `GET .../messages` shows `delivered`, then `read` (live `message.updated` events) |
+| Meta refuses | e.g. a number outside the test app's allowed list | | `201` with `status: "failed"` |
+
+### 11.4 The 24-hour window and templates
+WhatsApp only allows free-form replies within 24 hours of the customer's last message.
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Window closed | `POST /conversations/{id}/messages` 24 h+ after the customer's last message | `{"content": "Hi"}` | `409` "The 24-hour customer service window is closed. Send an approved template instead." Nothing sent or stored |
+| Templates | `GET /channels/{WA_ID}/templates` | none | approved templates with `body` and `parameter_count` (new Meta test apps have `hello_world`) |
+| Send one | `POST /conversations/{id}/template` | `{"name": "hello_world", "language": "en_US", "parameters": []}` | `201`, `type: "template"`, content = the template body; works with the window closed |
+| Missing parameter | same, fewer `parameters` than `parameter_count` | | `422` |
+| Unknown template | `{"name": "nope", ...}` | | `404` |
+| Demo channel | `GET /channels/{demo whatsapp id}/templates` | | `400` (simulated channels have no templates) |
+
+### 11.5 Disconnect
+`DELETE /channels/{WA_ID}` → `204`. The channel shows `status: "disconnected"` and AI auto-reply off. Its stored
+credentials are deleted, the conversations stay readable, new webhook events get `410`, and sending gets `409`.
+In the demo workspace, `POST /demo/reset` removes connected numbers entirely.
+

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Clock, ChevronDown } from 'lucide-react';
 import { apiService } from '../../context/MessagingContext';
-import { aiApi, type AgentSummary, type Channel } from '../../services/aiApi';
+import { aiApi, type AgentSummary } from '../../services/aiApi';
+import { channelApi, type Channel } from '../../services/channelApi';
 
 interface BreakPeriod {
   id: string;
@@ -37,7 +38,7 @@ export const AiScheduleModal: React.FC<AiScheduleModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (!isOpen || !apiService) return;
     setError('');
-    Promise.all([aiApi.listChannels(), aiApi.listAgents()]).then(([channelList, agentList]) => {
+    Promise.all([channelApi.listChannels(), aiApi.listAgents()]).then(([channelList, agentList]) => {
       const enabled = channelList.filter(c => c.ai_enabled);
       setChannels(channelList);
       setAgents(agentList);

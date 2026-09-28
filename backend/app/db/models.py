@@ -1,14 +1,25 @@
 import uuid
 from typing import Optional, Any
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import DateTime, String, Text, Boolean, Integer, ForeignKey, Uuid, JSON, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+_last_timestamp = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def utcnow() -> datetime:
+    """
+    Current UTC time, strictly increasing within the process. Windows clocks tick every ~15 ms, so two rows
+    created back to back (a customer message and an instant AI reply) could otherwise share a timestamp and sort
+    in either order.
+    """
+    # ponytail: per-process guarantee only; add a sequence column if several workers write the same conversation.
+    global _last_timestamp
+    _last_timestamp = max(datetime.now(timezone.utc), _last_timestamp + timedelta(microseconds=1))
+    return _last_timestamp
 
 
 class BaseModelMixin(Base):
@@ -20,7 +31,7 @@ class BaseModelMixin(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Python-side default keeps microseconds; SQLite's now() only has whole seconds, which breaks ordering.
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 

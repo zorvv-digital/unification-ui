@@ -50,6 +50,12 @@ describe('messagingReducer', () => {
     expect(next.contacts).toHaveLength(1);
   });
 
+  it('updates a message in place when its delivery status changes', () => {
+    const start = state({ messages: [message('m1', 'a', 'outbound'), message('m2', 'a', 'inbound')] });
+    const next = messagingReducer(start, { type: 'MESSAGE_UPDATED', payload: { ...message('m1', 'a', 'outbound'), status: 'read' } });
+    expect(next.messages.map(m => [m.id, m.status])).toEqual([['m1', 'read'], ['m2', undefined]]);
+  });
+
   it('applies an AI escalation from the server (mode and needs-human flag)', () => {
     const start = state({ conversations: [{ ...conversation('a', 100), mode: 'ai', needsHuman: false }] });
     const escalated = { ...conversation('a', 100), mode: 'human' as const, needsHuman: true };

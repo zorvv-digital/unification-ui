@@ -1,18 +1,21 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Awaitable, Callable, Optional, Sequence
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Channel, Contact, Conversation, Message
-from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse
+from app.db.models import Channel, Contact, Conversation, Message, utcnow
+from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
+from app.providers.whatsapp import PLACEHOLDER
 from app.services.base import BaseService
-from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage
+from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage, StatusUpdate
 from app.services.event_service import EventService
 
 PREVIEW_LENGTH = 120
+# Delivery statuses only move forward; `failed` always applies.
+STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
 
 
 def _not_found(what: str) -> HTTPException:
@@ -100,6 +103,7 @@ class InboxService(BaseService):
         Stores an outbound message and delivers it through the conversation's channel adapter.
         A closed conversation is reopened. A delivery failure keeps the message with status `failed`.
         A staff message takes the conversation over: mode becomes `human` and the needs-human flag clears.
+        Channels with a customer service window (WhatsApp) refuse free-form messages once it has closed.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
@@ -110,26 +114,126 @@ class InboxService(BaseService):
 
         Returns:
             Message: The stored message.
+
+        Raises:
+            HTTPException: 409 when the channel is disconnected or its customer service window is closed.
         """
         conversation = await cls.get_conversation(db, workspace_id, conversation_id)
+        channel = conversation.channel
+        adapter = ADAPTERS[channel.adapter_type]
+        await cls._check_can_send(db, conversation, adapter, free_form=True)
+        return await cls._store_outbound(
+            db, conversation, data.type, data.content, author, lambda message: adapter.send(channel, conversation, message)
+        )
+
+    @classmethod
+    async def send_template(
+        cls, db: AsyncSession, workspace_id: uuid.UUID, conversation_id: uuid.UUID, data: TemplateSend
+    ) -> Message:
+        """
+        Sends an approved message template, which is allowed outside the customer service window.
+        The stored message has type `template` and the rendered body as content.
+
+        Raises:
+            HTTPException: 400 when the channel has no templates, 404 for an unknown template,
+                422 for missing parameters, 409 when disconnected, 502 when the templates cannot be loaded.
+        """
+        conversation = await cls.get_conversation(db, workspace_id, conversation_id)
+        channel = conversation.channel
+        adapter = ADAPTERS[channel.adapter_type]
+        if not hasattr(adapter, "send_template"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This channel has no message templates")
+        await cls._check_can_send(db, conversation, adapter, free_form=False)
+        try:
+            templates = await adapter.list_templates(channel)
+        except ChannelError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not load templates: {exc}")
+        template = next((t for t in templates if t.name == data.name and t.language == data.language), None)
+        if not template:
+            raise _not_found("Template")
+        if len(data.parameters) < template.parameter_count:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Template {template.name} needs {template.parameter_count} parameters",
+            )
+        parameters = data.parameters[: template.parameter_count]
+        content = PLACEHOLDER.sub(lambda m: parameters[int(m.group(1)) - 1] if int(m.group(1)) <= len(parameters) else m.group(0), template.body)
+        return await cls._store_outbound(
+            db, conversation, "template", content, "staff",
+            lambda message: adapter.send_template(channel, conversation, template, parameters),
+        )
+
+    @classmethod
+    async def apply_status(cls, db: AsyncSession, channel: Channel, update_: StatusUpdate) -> Optional[Message]:
+        """
+        Applies a channel-reported delivery status to our outbound message and emits `message.updated`.
+        Late, out-of-order statuses (e.g. `delivered` after `read`) and unknown message ids are ignored.
+
+        Returns:
+            Optional[Message]: The updated message, or None when nothing changed.
+        """
+        result = await db.execute(
+            select(Message)
+            .join(Conversation, Message.conversation_id == Conversation.id)
+            .where(Conversation.channel_id == channel.id, Message.external_id == update_.external_id)
+        )
+        message = result.scalars().first()
+        if not message or message.status == update_.status:
+            return None
+        if update_.status != "failed" and STATUS_RANK.get(update_.status, 0) <= STATUS_RANK.get(message.status, 0):
+            return None
+        message.status = update_.status
+        await db.commit()
+        EventService.publish(channel.workspace_id, "message.updated", MessageResponse.model_validate(message))
+        return message
+
+    @classmethod
+    async def _check_can_send(cls, db: AsyncSession, conversation: Conversation, adapter, free_form: bool) -> None:
+        if conversation.channel.status == "disconnected":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This channel is disconnected")
+        window = getattr(adapter, "session_window", None)
+        if not (free_form and window):
+            return
+        result = await db.execute(
+            select(func.max(Message.created_at)).where(Message.conversation_id == conversation.id, Message.direction == "inbound")
+        )
+        last_inbound = result.scalar_one()
+        if last_inbound and last_inbound.tzinfo is None:
+            last_inbound = last_inbound.replace(tzinfo=timezone.utc)  # SQLite returns naive UTC
+        if not last_inbound or datetime.now(timezone.utc) - last_inbound > window:
+            hours = int(window.total_seconds() // 3600)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"The {hours}-hour customer service window is closed. Send an approved template instead.",
+            )
+
+    @classmethod
+    async def _store_outbound(
+        cls,
+        db: AsyncSession,
+        conversation: Conversation,
+        type_: str,
+        content: str,
+        author: str,
+        deliver: Callable[[Message], Awaitable[str]],
+    ) -> Message:
         conversation.status = "open"
         if author == "staff":
             conversation.mode = "human"
             conversation.needs_human = False
         message = Message(
-            workspace_id=workspace_id,
+            workspace_id=conversation.workspace_id,
             conversation_id=conversation.id,
             platform=conversation.platform,
             direction="outbound",
-            type=data.type,
-            content=data.content,
+            type=type_,
+            content=content,
             status="sent",
             author=author,
-            created_at=datetime.now(timezone.utc),
+            created_at=utcnow(),
         )
         try:
-            adapter = ADAPTERS[conversation.channel.adapter_type]
-            message.external_id = await adapter.send(conversation.channel, conversation, message)
+            message.external_id = await deliver(message)
         except ChannelError:
             message.status = "failed"
 
@@ -193,7 +297,7 @@ class InboxService(BaseService):
             status="delivered",
             author="customer",
             external_id=inbound.message_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=utcnow(),
         )
         conversation.status = "open"
         conversation.unread_count = (conversation.unread_count or 0) + 1

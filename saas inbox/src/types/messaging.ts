@@ -27,7 +27,7 @@ export interface Conversation {
   needsHuman?: boolean;
 }
 
-export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'emoji';
+export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'emoji' | 'template';
 export type MessageDirection = 'inbound' | 'outbound';
 
 export interface Message {

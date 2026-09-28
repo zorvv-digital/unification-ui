@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_valida
 Platform = Literal["whatsapp", "instagram", "messenger"]
 ConversationStatus = Literal["open", "closed"]
 ConversationMode = Literal["ai", "human"]
-MessageType = Literal["text", "image", "video", "audio", "file", "emoji"]
+MessageType = Literal["text", "image", "video", "audio", "file", "emoji", "template"]
 
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
@@ -75,6 +75,39 @@ class ChannelResponse(BaseModel):
     ai_enabled: bool
     ai_agent_id: Optional[uuid.UUID] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class WhatsAppConnect(BaseModel):
+    """Credentials from Meta's WhatsApp Manager / App Dashboard."""
+    phone_number_id: str = Field(min_length=1, max_length=64)
+    waba_id: str = Field(min_length=1, max_length=64)
+    access_token: str = Field(min_length=1)
+    app_secret: str = Field(min_length=1)
+    name: Optional[str] = Field(None, max_length=255)
+
+
+class WebhookInfo(BaseModel):
+    """Values to paste into Meta's webhook configuration."""
+    webhook_url: str
+    verify_token: str
+
+
+class ChannelConnectedResponse(ChannelResponse, WebhookInfo):
+    pass
+
+
+class TemplateResponse(BaseModel):
+    name: str
+    language: str
+    category: str
+    body: str
+    parameter_count: int
+
+
+class TemplateSend(BaseModel):
+    name: str = Field(min_length=1)
+    language: str = Field(min_length=1)
+    parameters: list[str] = []
 
 
 class ChannelUpdate(BaseModel):

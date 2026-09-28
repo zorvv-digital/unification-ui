@@ -71,8 +71,8 @@ class DemoService(BaseService):
     @classmethod
     async def reset(cls, db: AsyncSession, workspace: Workspace) -> None:
         """
-        Restores the demo workspace's contacts, conversations, messages, agent, knowledge, and auto-reply settings
-        to the seed state.
+        Restores the demo workspace's contacts, conversations, messages, channels, agent, knowledge, and auto-reply
+        settings to the seed state.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
@@ -86,6 +86,8 @@ class DemoService(BaseService):
         await db.execute(delete(Message).where(Message.workspace_id == workspace.id))
         await db.execute(delete(Conversation).where(Conversation.workspace_id == workspace.id))
         await db.execute(delete(Contact).where(Contact.workspace_id == workspace.id))
+        # Real numbers connected during a demo go too; only the seeded simulated channels remain.
+        await db.execute(delete(Channel).where(Channel.workspace_id == workspace.id, Channel.adapter_type != "simulated"))
         agent_ids = await db.execute(select(Agent.id).where(Agent.workspace_id == workspace.id))
         await AgentService.delete_agents(db, list(agent_ids.scalars().all()))
         await db.execute(delete(KnowledgeItem).where(KnowledgeItem.workspace_id == workspace.id))

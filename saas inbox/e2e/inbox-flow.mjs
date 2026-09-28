@@ -1,8 +1,11 @@
 // End-to-end check of docs/ui-user-flow.md against a running backend and saas inbox.
-// Run: npm run e2e   (backend on :8000 with DEMO_MODE=true, `npm run dev` on :5173)
+// Run: npm run e2e   (`npm run dev` on :5173; backend on :8000 with DEMO_MODE=true and
+//      META_GRAPH_URL=http://127.0.0.1:8765, the mock Meta Graph API this script starts)
 // Uses an installed browser via BROWSER_CHANNEL (default msedge; chrome also works).
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 
 const UI = process.env.UI_URL ?? 'http://localhost:5173';
@@ -15,6 +18,35 @@ const api = async (path, init = {}, token) => {
     ...init, headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
   });
   return res.status === 204 ? null : res.json();
+};
+
+// --- Mock Meta Graph API (WhatsApp Cloud API) ---
+const WA = { phoneId: '109876543210', wabaId: '208765432109', token: 'e2e-good-token', secret: 'e2e-app-secret', customer: '919800033333' };
+const graphSends = [];
+const graph = http.createServer((req, res) => {
+  let body = '';
+  req.on('data', chunk => (body += chunk));
+  req.on('end', () => {
+    const reply = (code, data) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+    if (req.headers.authorization !== `Bearer ${WA.token}`) return reply(401, { error: { message: 'Invalid OAuth access token.' } });
+    const path = new URL(req.url, 'http://graph').pathname;
+    if (req.method === 'GET' && path === `/${WA.phoneId}`) return reply(200, { id: WA.phoneId, display_phone_number: '+91 98000 22222' });
+    if (req.method === 'POST' && path === `/${WA.phoneId}/messages`) {
+      graphSends.push(JSON.parse(body));
+      return reply(200, { messages: [{ id: `wamid.e2e${graphSends.length}` }] });
+    }
+    if (req.method === 'GET' && path === `/${WA.wabaId}/message_templates`) {
+      return reply(200, { data: [{ name: 'appointment_reminder', language: 'en_US', status: 'APPROVED', category: 'UTILITY', components: [{ type: 'BODY', text: 'Hi {{1}}, see you on {{2}}.' }] }] });
+    }
+    reply(404, { error: { message: 'Unknown path' } });
+  });
+}).listen(8765);
+
+// Posts a Meta webhook event signed with the app secret, like Meta does.
+const metaEvent = (channelId, value) => {
+  const raw = JSON.stringify({ object: 'whatsapp_business_account', entry: [{ id: WA.wabaId, changes: [{ field: 'messages', value }] }] });
+  const signature = 'sha256=' + crypto.createHmac('sha256', WA.secret).update(raw).digest('hex');
+  return fetch(`${API}/webhooks/${channelId}`, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature } });
 };
 
 const { access_token: token } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: 'demo@unification.app', password: 'demo12345' }) });
@@ -165,6 +197,85 @@ await step('A7. the header switch turns auto-reply off and back on per channel',
   assert.deepEqual(channels.filter(c => c.ai_enabled).map(c => c.platform), ['whatsapp']);
 });
 
+// --- WhatsApp Cloud API (add-whatsapp-channel) ---
+let waChannel;
+const fillCredentials = async accessToken => {
+  await page.getByLabel('Phone number ID').fill(WA.phoneId);
+  await page.getByLabel('WhatsApp Business Account ID').fill(WA.wabaId);
+  await page.getByLabel('Access token').fill(accessToken);
+  await page.getByLabel('App secret').fill(WA.secret);
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+};
+
+await step('W1. connecting with credentials Meta rejects shows the error', async () => {
+  await page.goto(`${UI}/whatsapp`);
+  await page.getByLabel('WhatsApp numbers').click();
+  await page.getByText('Demo number (simulated)').waitFor();
+  await fillCredentials('wrong-token');
+  await page.getByRole('alert').getByText('Meta rejected these credentials').waitFor();
+  assert.deepEqual(errors.splice(0).filter(e => !e.includes('400') && !e.includes('401')), []); // the 400 response is expected here
+});
+
+await step('W2. valid credentials connect the number and show the webhook to register', async () => {
+  await fillCredentials(WA.token);
+  await page.getByRole('status').getByText('Connected!').waitFor();
+  waChannel = (await api('/channels', {}, token)).find(c => c.adapter_type === 'whatsapp');
+  assert.equal(await page.getByLabel('Webhook URL').inputValue(), `http://localhost:8000/api/v1/webhooks/${waChannel.id}`);
+  assert.ok((await page.getByLabel('Verify token').inputValue()).length >= 16);
+  await page.getByText('WhatsApp +91 98000 22222').waitFor();
+  await page.screenshot({ path: SHOTS + 'W2-connected.png' });
+  await page.getByLabel('Close').click();
+});
+
+await step('W3. Meta webhook verification handshake', async () => {
+  const { verify_token } = await api(`/channels/${waChannel.id}/webhook`, {}, token);
+  const res = await fetch(`${API}/webhooks/${waChannel.id}?hub.mode=subscribe&hub.verify_token=${verify_token}&hub.challenge=e2e-challenge`);
+  assert.equal(await res.text(), 'e2e-challenge');
+});
+
+await step('W4. a signed WhatsApp message appears live', async () => {
+  const res = await metaEvent(waChannel.id, {
+    messaging_product: 'whatsapp',
+    contacts: [{ profile: { name: 'Kiran' }, wa_id: WA.customer }],
+    messages: [{ from: WA.customer, id: 'wamid.in-e2e-1', timestamp: '1727600000', type: 'text', text: { body: 'Hi from real WhatsApp' } }],
+  });
+  assert.equal(res.status, 200);
+  await page.getByText('Kiran').first().click();
+  await page.getByText('Hi from real WhatsApp').last().waitFor();
+});
+
+await step('W5. a reply goes through the Cloud API and turns blue when read', async () => {
+  await page.getByPlaceholder('Type a message').fill('Hello Kiran, how can we help?');
+  await page.keyboard.press('Enter');
+  await page.getByText('Hello Kiran, how can we help?').last().waitFor();
+  assert.deepEqual(graphSends.at(-1), { messaging_product: 'whatsapp', to: WA.customer, type: 'text', text: { body: 'Hello Kiran, how can we help?' } });
+  await metaEvent(waChannel.id, { messaging_product: 'whatsapp', statuses: [{ id: `wamid.e2e${graphSends.length}`, status: 'read', recipient_id: WA.customer }] });
+  await page.waitForFunction(() => [...document.querySelectorAll('.bg-\\[\\#dcf8c6\\]')].at(-1)?.querySelector('svg')?.getAttribute('class')?.includes('53bdeb'));
+});
+
+await step('W6. an approved template can be sent', async () => {
+  await page.getByLabel('Send template').click();
+  await page.getByLabel('Parameter {{1}}').fill('Kiran');
+  await page.getByLabel('Parameter {{2}}').fill('Friday');
+  await page.getByLabel('Template preview').getByText('Hi Kiran, see you on Friday.').waitFor();
+  await page.screenshot({ path: SHOTS + 'W6-template.png' });
+  await page.locator('button[type=submit]', { hasText: 'Send template' }).click();
+  await page.getByLabel('Template preview').waitFor({ state: 'detached' });
+  await page.getByText('Hi Kiran, see you on Friday.').last().waitFor();
+  assert.equal(graphSends.at(-1).type, 'template');
+});
+
+await step('W7. disconnecting keeps the chat and rejects new events', async () => {
+  await page.getByLabel('WhatsApp numbers').click();
+  page.once('dialog', d => d.accept());
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await page.getByText('Disconnected', { exact: true }).waitFor();
+  await page.getByLabel('Close').click();
+  await page.getByText('Hi from real WhatsApp').last().waitFor();
+  const res = await metaEvent(waChannel.id, { messaging_product: 'whatsapp', messages: [] });
+  assert.equal(res.status, 410);
+});
+
 // --- AI playground (add-ai-agents) ---
 const chat = async text => {
   const before = await page.locator('.bg-white.rounded-tl-none').filter({ hasText: /\S/ }).count();
@@ -243,6 +354,7 @@ await step('9. reset demo restores the seed', async () => {
   const agents = await api('/agents', {}, token);
   assert.equal(agents.length, 1);
   assert.equal(agents[0].active_version_number, 1);
+  assert.ok((await api('/channels', {}, token)).every(c => c.adapter_type === 'simulated'));
   await page.screenshot({ path: SHOTS + '9-reset.png' });
 });
 
@@ -252,6 +364,7 @@ await step('10. log out returns to login', async () => {
 });
 
 await browser.close();
+graph.close();
 const relevant = errors.filter(e => !e.includes('401') && !e.includes('favicon'));
 assert.deepEqual(relevant, [], 'browser console errors');
 console.log('ALL UI FLOW STEPS PASSED');

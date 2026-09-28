@@ -1,4 +1,5 @@
 import { apiService } from '../context/MessagingContext';
+import type { Channel } from './channelApi';
 
 // Shapes match the backend responses (snake_case) one to one.
 
@@ -55,14 +56,6 @@ export interface ProfilerField {
   is_required: boolean;
 }
 
-export interface Channel {
-  id: string;
-  platform: string;
-  name: string;
-  ai_enabled: boolean;
-  ai_agent_id: string | null;
-}
-
 export interface AgentSetup {
   agent_name?: string;
   personality?: string;
@@ -100,7 +93,6 @@ export const aiApi = {
   updateKnowledge: (id: string, changes: Partial<KnowledgeItem>) =>
     api().request<KnowledgeItem>(`/knowledge/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
   // Inbox AI replies
-  listChannels: () => api().request<Channel[]>('/channels'),
   updateChannel: (id: string, changes: { ai_enabled?: boolean; ai_agent_id?: string }) =>
     api().request<Channel>(`/channels/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
   setConversationMode: (id: string, mode: 'ai' | 'human') =>

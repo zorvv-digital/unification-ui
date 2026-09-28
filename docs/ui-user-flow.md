@@ -1,7 +1,8 @@
 # UI User Flow
 
 How to run the platform locally and walk through the demo as a business user would.
-The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`).
+The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend with
+`META_GRAPH_URL=http://127.0.0.1:8765` for it, see §10).
 
 ## 0. Run both apps
 
@@ -129,7 +130,28 @@ The demo WhatsApp channel has AI auto-reply on, so the **AI auto-reply** switch 
 > Replying to a customer yourself switches their conversation to you, so the simulated customer replies in §3 keep working.
 > The WhatsApp, Instagram and Messenger pages keep their own layouts. The AI controls are on the **Inbox** page.
 
-## 10. Sign out
+## 10. Connect a real WhatsApp number
+
+Open **WhatsApp** in the sidebar and click **⋮** at the top of the chat list: the **WhatsApp numbers** window opens.
+The demo's own number is listed as *Demo number (simulated)*.
+
+1. **Connect.** Enter the *Phone number ID*, *WhatsApp Business Account ID*, *Access token* and *App secret*
+   from your Meta app (see `docs/api-testing-swagger.md` §11) → **Connect**.
+   Wrong credentials show "Meta rejected these credentials"; nothing is saved.
+2. **Register the webhook.** A green box shows the **Webhook URL** and **Verify token**. Paste them in the Meta App Dashboard
+   (WhatsApp → Configuration) and subscribe to **messages**. The backend needs a public URL for this (`PUBLIC_BASE_URL`, e.g. via ngrok).
+3. **Chat.** Customer messages to that number appear live on the WhatsApp page and in the Inbox.
+   Replies are sent through WhatsApp; the ticks turn blue when the customer reads them.
+4. **Templates.** In a chat on a real number, the 📄 button next to the text box opens **Send a template**: pick an approved template,
+   fill its parameters (the preview updates) → **Send template**. If you try to send a normal message more than 24 hours after
+   the customer's last message, an orange bar explains that the window is closed, with a **Send template** link.
+5. **Disconnect.** In **WhatsApp numbers**, click **Disconnect** next to the number and confirm. The chats stay; new messages
+   are no longer received. **Reset demo data** removes connected numbers from the demo workspace.
+
+> The automated E2E (`npm run e2e`) runs this whole flow against a mock Meta API it starts on port 8765.
+> Start the backend for it with `META_GRAPH_URL=http://127.0.0.1:8765`.
+
+## 11. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 
@@ -138,5 +160,5 @@ Click the **log-out icon** next to your name. You return to **Sign in**.
 ## Registering a real business
 
 There is no sign-up screen yet. Create a workspace with `POST /auth/register` in Swagger, then sign in with that email.
-A new business starts with an empty inbox and no channels; real channels (WhatsApp, Instagram, Messenger, Gmail, website chat)
-are connected in later changes.
+A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10; Instagram, Messenger,
+Gmail and website chat are connected in later changes.

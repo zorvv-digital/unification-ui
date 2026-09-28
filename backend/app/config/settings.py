@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     LLM_TIMEOUT_SECONDS: float = 60.0
 
+    # Channels
+    PUBLIC_BASE_URL: str = "http://localhost:8000"  # where Meta reaches this server (webhook URLs shown to users)
+    META_GRAPH_URL: str = "https://graph.facebook.com/v20.0"
+
     # Demo workspace
     DEMO_MODE: bool = True
     DEMO_EMAIL: str = "demo@unification.app"

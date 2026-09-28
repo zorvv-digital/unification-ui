@@ -15,6 +15,7 @@ from app.models.schemas import (
     MessageResponse,
     Platform,
     SuggestReplyResponse,
+    TemplateSend,
 )
 from app.services.ai_reply_service import AiReplyService
 from app.services.demo_service import DemoService
@@ -71,6 +72,20 @@ async def send_message(
     if user.workspace.is_demo:
         DemoService.schedule_reply(conversation_id)
     return message
+
+
+@router.post("/{conversation_id}/template", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+async def send_template(
+    conversation_id: uuid.UUID,
+    data: TemplateSend,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sends an approved WhatsApp template (allowed outside the 24-hour window). `parameters` fill `{{1}}`, `{{2}}`, ...
+    Returns 404 for an unknown template, 422 for missing parameters, 400 for channels without templates.
+    """
+    return await InboxService.send_template(db=db, workspace_id=user.workspace_id, conversation_id=conversation_id, data=data)
 
 
 @router.post("/{conversation_id}/read", response_model=ConversationResponse)

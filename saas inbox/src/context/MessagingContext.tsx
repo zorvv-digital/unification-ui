@@ -17,6 +17,7 @@ export type MessagingAction =
   | { type: 'INITIALIZE'; payload: { contacts: Contact[]; conversations: Conversation[]; messages: Message[] } }
   | { type: 'MESSAGE_SENT'; payload: Message }
   | { type: 'MESSAGE_RECEIVED'; payload: Message }
+  | { type: 'MESSAGE_UPDATED'; payload: Message }
   | { type: 'MARK_AS_READ'; payload: { conversationId: string } }
   | { type: 'CONVERSATION_UPDATED'; payload: { conversation: Conversation; contact?: Contact } };
 
@@ -69,6 +70,9 @@ export function messagingReducer(state: MessagingState, action: MessagingAction)
         ).sort((a, b) => b.lastMessageAt - a.lastMessageAt) // Move to top
       };
     }
+
+    case 'MESSAGE_UPDATED':
+      return { ...state, messages: state.messages.map(m => (m.id === action.payload.id ? action.payload : m)) };
 
     case 'MARK_AS_READ': {
       return {
@@ -153,6 +157,7 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       source = apiService.subscribe({
         onMessage: message =>
           dispatch({ type: message.direction === 'outbound' ? 'MESSAGE_SENT' : 'MESSAGE_RECEIVED', payload: message }),
+        onMessageUpdated: message => dispatch({ type: 'MESSAGE_UPDATED', payload: message }),
         onConversation: (conversation, contact) =>
           dispatch({ type: 'CONVERSATION_UPDATED', payload: { conversation, contact } }),
       });
