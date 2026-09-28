@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Inbox, MessageSquare, Users, BarChart2, Zap, Settings,
-  ChevronDown, X, Mail
+  ChevronDown, X, Mail, LogOut, RotateCcw
 } from 'lucide-react';
+import { apiService } from '../../context/MessagingContext';
+import { clearToken, type ApiUser } from '../../services/messaging/HttpMessageService';
 import { Avatar } from '../messaging/Avatar';
 import { InstagramIcon } from '../icons/InstagramIcon';
 import { FaWhatsapp } from 'react-icons/fa';
@@ -17,6 +19,22 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [user, setUser] = useState<ApiUser | null>(null);
+
+  useEffect(() => {
+    apiService?.me().then(setUser).catch(() => setUser(null));
+  }, []);
+
+  const logout = () => {
+    clearToken();
+    window.location.href = '/login';
+  };
+
+  const resetDemo = async () => {
+    if (!apiService || !window.confirm('Reset the demo workspace to its original conversations?')) return;
+    await apiService.resetDemo();
+    window.location.reload();
+  };
 
   return (
     <>
@@ -91,13 +109,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
 
         {/* Bottom User Area */}
         <div className="p-4 border-t border-[var(--color-brand-border)] shrink-0">
-          <button className="flex items-center gap-3 w-full hover:bg-gray-100 p-2 -mx-2 rounded-lg transition-colors">
-            <Avatar alt="Jane Doe" size="sm" src="https://i.pravatar.cc/150?u=admin" className="w-8 h-8" />
+          <div className="flex items-center gap-3 w-full p-2 -mx-2 rounded-lg">
+            <Avatar alt={user?.name ?? 'Jane Doe'} size="sm" src={user ? undefined : 'https://i.pravatar.cc/150?u=admin'} className="w-8 h-8" />
             <div className="flex-1 text-left min-w-0">
-              <div className="text-sm font-medium text-[var(--color-brand-text)] truncate">Jane Doe</div>
-              <div className="text-xs text-[var(--color-brand-text-secondary)] truncate">Admin</div>
+              <div className="text-sm font-medium text-[var(--color-brand-text)] truncate">{user?.name ?? 'Jane Doe'}</div>
+              <div className="text-xs text-[var(--color-brand-text-secondary)] truncate">{user?.workspace.name ?? 'Admin'}</div>
             </div>
-          </button>
+            {user && (
+              <button onClick={logout} title="Log out" aria-label="Log out" className="p-1.5 rounded-lg text-[var(--color-brand-text-secondary)] hover:bg-gray-100 hover:text-[var(--color-brand-text)] transition-colors">
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
+          {user?.workspace.is_demo && (
+            <button onClick={resetDemo} className="mt-2 flex items-center justify-center gap-2 w-full px-3 py-1.5 rounded-lg border border-[var(--color-brand-border)] text-xs font-medium text-[var(--color-brand-text-secondary)] hover:bg-gray-50 hover:text-[var(--color-brand-text)] transition-colors">
+              <RotateCcw size={14} />
+              Reset demo data
+            </button>
+          )}
         </div>
       </aside>
     </>

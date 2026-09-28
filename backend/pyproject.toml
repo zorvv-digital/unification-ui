@@ -1,0 +1,29 @@
+[project]
+name = "unification-backend"
+version = "0.1.0"
+description = "Unified inbox, reputation and engagement platform API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "asyncpg>=0.29.0",
+    "fastapi>=0.110.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "pyjwt>=2.8.0",
+    "sqlalchemy[asyncio]>=2.0.28,<2.1",  # 2.1 cython DLLs are blocked by Windows Application Control on dev machines
+    "uvicorn[standard]>=0.28.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27.0",
+    "pytest>=8.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

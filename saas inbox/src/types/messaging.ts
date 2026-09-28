@@ -16,6 +16,7 @@ export interface Conversation {
   id: string;
   platform: Platform;
   contactId: string;
+  channelId?: string;
   externalId?: string;
   lastMessageId?: string;
   lastMessageAt: number;

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Sidebar } from '../components/inbox/Sidebar';
 import { Header } from '../components/inbox/Header';
-import { ArrowLeft, Phone, Video, MoreVertical, Send, Bot, Check, Plus, Book, Calendar, Headset, ChevronRight, X, Mail, FileText, Settings, Briefcase } from 'lucide-react';
-import { FaWhatsapp, FaDesktop, FaSlack } from 'react-icons/fa';
-import { SiShopify, SiGmail, SiGoogledrive, SiGithub, SiDropbox, SiStripe, SiHubspot } from 'react-icons/si';
+import { ArrowLeft, Phone, Video, MoreVertical, Send, Bot, Plus, Book, ChevronRight, X, Mail, FileText, Settings, Briefcase } from 'lucide-react';
+import { FaWhatsapp, FaDesktop } from 'react-icons/fa';
+import { SiShopify, SiGmail, SiGoogledrive, SiGithub } from 'react-icons/si';
 
 interface Message {
   id: string;
