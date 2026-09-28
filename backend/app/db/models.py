@@ -1,10 +1,14 @@
 import uuid
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import DateTime, String, Text, Boolean, Integer, ForeignKey, Uuid, JSON, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class BaseModelMixin(Base):
@@ -15,7 +19,8 @@ class BaseModelMixin(Base):
     __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Python-side default keeps microseconds; SQLite's now() only has whole seconds, which breaks ordering.
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -98,3 +103,60 @@ class Message(BaseModelMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="sent")
     external_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+
+class Agent(BaseModelMixin):
+    """
+    A workspace AI agent. Its behavior lives in versions; `active_version_number` selects the live one.
+    """
+    __tablename__ = "agents"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    business_profile: Mapped[Any] = mapped_column(JSON, nullable=False, default=dict)
+    active_version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class AgentVersion(BaseModelMixin):
+    __tablename__ = "agent_versions"
+    __table_args__ = (UniqueConstraint("agent_id", "version_number"),)
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    agent_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    greeting_message: Mapped[str] = mapped_column(Text, nullable=False)
+    personality: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    rules: Mapped[Any] = mapped_column(JSON, nullable=False, default=list)
+    skills: Mapped[Any] = mapped_column(JSON, nullable=False, default=list)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class KnowledgeItem(BaseModelMixin):
+    __tablename__ = "knowledge_items"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(100), nullable=False, default="General")
+    description: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class AgentKnowledge(BaseModelMixin):
+    __tablename__ = "agent_knowledge"
+    __table_args__ = (UniqueConstraint("agent_id", "knowledge_item_id"),)
+
+    agent_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    knowledge_item_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("knowledge_items.id", ondelete="CASCADE"), nullable=False)
+
+
+class PlaygroundMessage(BaseModelMixin):
+    __tablename__ = "playground_messages"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    agent_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)

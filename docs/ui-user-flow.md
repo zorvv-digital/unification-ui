@@ -76,10 +76,35 @@ Reload the page: all messages you sent and received are still there, because the
 ## 7. Reset the demo
 
 Click **Reset demo data** (bottom-left) → confirm. The inbox returns to the original six conversations; Meera and
-everything you sent are gone. Use this before each demo.
+everything you sent are gone. The AI Playground returns to the single Glow Assistant (v1) with its four knowledge items.
+Use this before each demo.
 Only the demo workspace shows this button.
 
-## 8. Sign out
+## 8. AI Playground: test and improve your AI agent
+
+Open **AI Playground** in the sidebar.
+
+> Answers come from the offline demo AI unless the backend has a real provider configured
+> (`LLM_PROVIDER=openai` + `LLM_API_KEY` in `backend/.env`, see `docs/api-testing-swagger.md` §9).
+> The offline AI answers with the matching knowledge item, so the flow below works without any key.
+
+1. **The demo agent is ready.** The right panel shows **Glow Assistant** and **Testing v1 · live**; the phone shows its greeting.
+2. **Chat with it.** Type `What is your pricing for a haircut?` in the phone and press Enter. It answers from the **Pricing** knowledge.
+   The ↻ button next to the version picker starts a fresh chat.
+3. **Improve it with feedback.** In **Improve with feedback** type `Always mention free parking` → **Create draft**.
+   A blue note says *Draft v2 is ready*; the phone header shows **testing draft v2**. Customers still get v1.
+4. **Make it live.** Under **Versions**, click **Activate** next to v2. v2 shows the green **Live** badge.
+   To roll back, click **Activate** on v1.
+5. **Edit the instructions directly.** Change the text in **Instructions** → **Save as new version** (becomes live immediately).
+6. **Teach it something new.** Click **Connectors and skills** → under **Custom Skills** click **Create New**,
+   enter `Gift Vouchers` / `Vouchers from 1,000 INR, valid for one year.` → **Add skill**.
+   The new card has **Used by agent** and **Enabled** ticked. Close the window and ask `Do you sell gift vouchers?`;
+   the agent uses the new skill right away (no new version needed). Untick **Enabled** or **Used by agent** to stop it using a skill.
+7. **Build a new agent.** Click **+ New agent** → enter `Bright Smile` / `Dental Clinic` → **Next**.
+   Answer the questions tailored to a dental clinic, optionally name it `Smiley` → **Generate agent**.
+   The new agent is selected and greets you; switch between agents with the agent picker.
+
+## 9. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 

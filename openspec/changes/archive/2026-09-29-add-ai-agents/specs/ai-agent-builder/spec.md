@@ -29,11 +29,11 @@ The system SHALL generate an agent from a business profile, answers to profiling
 - **THEN** the system returns a 502 error and stores no agent
 
 ### Requirement: Manual edit creates a version
-The system SHALL let a user edit an agent's system prompt, greeting, personality, rules, and skills. Each saved edit SHALL create a new version; earlier versions SHALL remain unchanged.
+The system SHALL let a user edit an agent's system prompt, greeting, personality, rules, and skills. Each saved edit SHALL create a new version that becomes the active version; earlier versions SHALL remain unchanged.
 
 #### Scenario: Edit prompt
 - **WHEN** a user saves a changed system prompt for an agent at version 3
-- **THEN** version 4 is created with the new prompt and version 3 is still retrievable
+- **THEN** version 4 is created with the new prompt and is active, and version 3 is still retrievable
 
 ### Requirement: Refine by feedback
 The system SHALL accept plain-language feedback about an agent (for example "be more formal" or "always mention free parking") and produce a revised system prompt as a new version that is not active until the user activates it.
@@ -55,3 +55,14 @@ A workspace SHALL be able to hold multiple agents, and the system SHALL let a us
 #### Scenario: Delete agent
 - **WHEN** a user deletes an agent
 - **THEN** the agent and all its versions are removed and no longer listed
+
+### Requirement: Demo agent
+When demo mode is enabled, the demo workspace SHALL include a ready-to-use agent with attached knowledge items, and a demo reset SHALL restore the agent, its versions, and the knowledge items to their seeded state.
+
+#### Scenario: Demo playground ready
+- **WHEN** a demo user opens the AI playground for the first time
+- **THEN** a seeded agent with knowledge items is available to chat with
+
+#### Scenario: Reset restores agent
+- **WHEN** a demo user edits the demo agent and then resets the demo
+- **THEN** the agent is back to its seeded version and knowledge

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 
 # Extended by later channel changes (gmail, website, ...).
@@ -152,3 +152,148 @@ class MessageCreate(BaseModel):
 
 class ConversationUpdate(BaseModel):
     status: ConversationStatus
+
+
+# ==========================================
+# AI agents, knowledge, and playground
+# ==========================================
+
+UiType = Literal["text", "textarea", "select", "multiselect"]
+VersionSource = Literal["generated", "manual", "feedback"]
+
+
+class BusinessProfile(BaseModel):
+    business_name: str = Field(min_length=1, max_length=255)
+    business_type: str = Field(min_length=1, max_length=255)
+    location: Optional[str] = None
+    offerings: list[str] = Field(default_factory=list)
+    working_hours: Optional[str] = None
+
+
+class ProfilerField(BaseModel):
+    field_id: str
+    question_text: str
+    ui_type: UiType
+    options: Optional[list[str]] = None
+    is_required: bool
+
+
+class ProfilerOutput(BaseModel):
+    """LLM output: follow-up onboarding questions."""
+    fields: list[ProfilerField]
+
+
+class AgentSetup(BaseModel):
+    agent_name: Optional[str] = None
+    personality: Optional[str] = None
+    business_objective: Optional[str] = None
+    rules: list[str] = Field(default_factory=list)
+
+
+class AgentGenerateRequest(BaseModel):
+    business_profile: BusinessProfile
+    collected_answers: dict[str, Any] = Field(default_factory=dict)
+    agent_setup: Optional[AgentSetup] = None
+
+
+class AgentSkill(BaseModel):
+    skill_name: str
+    description: str
+
+
+class BuilderOutput(BaseModel):
+    """LLM output: a generated agent."""
+    agent_name: str
+    system_prompt: str
+    greeting_message: str
+    skills: list[AgentSkill] = Field(default_factory=list)
+
+
+class RefineOutput(BaseModel):
+    """LLM output: a revised system prompt."""
+    system_prompt: str
+
+
+class AgentVersionResponse(BaseModel):
+    id: uuid.UUID
+    version_number: int
+    system_prompt: str
+    greeting_message: str
+    personality: Optional[str] = None
+    rules: list[str]
+    skills: list[AgentSkill]
+    source: VersionSource
+    feedback: Optional[str] = None
+    is_active: bool = False
+    created_at: UtcDatetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AgentResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    active_version_number: int
+    active_version: AgentVersionResponse
+    knowledge_ids: list[uuid.UUID]
+
+
+class AgentSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+    active_version_number: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AgentRename(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class AgentVersionCreate(BaseModel):
+    """Manual edit: omitted fields are copied from the active version."""
+    system_prompt: Optional[str] = Field(None, min_length=1)
+    greeting_message: Optional[str] = Field(None, min_length=1)
+    personality: Optional[str] = None
+    rules: Optional[list[str]] = None
+    skills: Optional[list[AgentSkill]] = None
+
+
+class RefineRequest(BaseModel):
+    feedback: str = Field(min_length=1, max_length=2000)
+
+
+class KnowledgeCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    category: str = Field("General", max_length=100)
+    description: str = Field("", max_length=500)
+    content: str = Field(min_length=1, max_length=20000)
+    enabled: bool = True
+
+
+class KnowledgeUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    category: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    content: Optional[str] = Field(None, min_length=1, max_length=20000)
+    enabled: Optional[bool] = None
+
+
+class KnowledgeResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    category: str
+    description: str
+    content: str
+    enabled: bool
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlaygroundChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: Optional[str] = Field(None, max_length=64)
+    version_number: Optional[int] = None
+
+
+class PlaygroundChatResponse(BaseModel):
+    reply: str
+    session_id: str
+    version_number: int

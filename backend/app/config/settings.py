@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +27,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "unification-dev-secret-key-change-in-production-32b"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     CORS_ORIGINS: list[str] = ["*"]
+
+    # LLM: "fake" (offline, deterministic) or "openai" (any OpenAI-compatible API: OpenAI, Gemini, NVIDIA NIM)
+    LLM_PROVIDER: str = "fake"
+    LLM_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "gemini-2.5-flash"
+    LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    LLM_TIMEOUT_SECONDS: float = 60.0
 
     # Demo workspace
     DEMO_MODE: bool = True

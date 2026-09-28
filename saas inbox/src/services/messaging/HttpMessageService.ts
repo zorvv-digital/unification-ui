@@ -91,7 +91,7 @@ export class HttpMessageService implements MessageService {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(path: string, init: RequestInit = {}, auth = true): Promise<T> {
+  async request<T>(path: string, init: RequestInit = {}, auth = true): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const token = getToken();
     if (auth && token) headers.Authorization = `Bearer ${token}`;

@@ -186,3 +186,75 @@ A real business's messages never get simulated replies; it has no channels until
 Authorize with the demo token again.
 `POST /api/v1/demo/reset` → `204`.
 `GET /conversations`: back to the 6 seeded conversations; Meera and all messages you sent are gone, and unread counts are restored.
+
+---
+
+## 9. AI agents, knowledge, and playground
+
+These endpoints are under the **AI Agents** and **Knowledge** tags. Stay authorized as the demo user.
+
+> **AI provider.** By default the backend uses `LLM_PROVIDER=fake`: an offline, deterministic model. It answers with the
+> matching knowledge item (e.g. asking about "pricing" returns the Pricing item) and otherwise with a generic reply.
+> For real AI answers set in `backend/.env`:
+> `LLM_PROVIDER=openai`, `LLM_API_KEY=...`, and optionally `LLM_MODEL` / `LLM_BASE_URL` (any OpenAI-compatible API:
+> OpenAI, Gemini's OpenAI endpoint (the default URL), NVIDIA NIM). Restart the server after changing it.
+
+### 9.1 Knowledge items
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| List | `GET /knowledge` | none | 4 demo items: About Us, Brand Tone, Pricing, Booking Policy |
+| Create | `POST /knowledge` | `{"title": "Gift Vouchers", "category": "Sales", "content": "Vouchers from 1,000 INR, valid 1 year."}` | `201`, `enabled: true`. Copy its `id` (ITEM_ID) |
+| Update | `PATCH /knowledge/{ITEM_ID}` | `{"content": "Vouchers from 1,500 INR."}` | `200`, only content changed |
+| Too long | `POST /knowledge` | `content` longer than 20,000 characters | `422` |
+| Disable | `PATCH /knowledge/{ITEM_ID}` | `{"enabled": false}` | `enabled: false` |
+
+### 9.2 The demo agent
+1. `GET /agents` → one agent, **Glow Assistant**, `active_version_number: 1`. Copy its `id` (AGENT_ID).
+2. `GET /agents/{AGENT_ID}` → the full active version (system prompt, greeting, rules) and `knowledge_ids` (the 4 demo items).
+
+### 9.3 Playground chat
+1. `POST /agents/{AGENT_ID}/playground/chat` with `{"message": "What is your pricing for a haircut?"}`.
+   Expect `200` with a `reply`, a new `session_id`, and `version_number: 1`. Copy the `session_id`.
+2. Continue the conversation: `{"message": "And a beard trim?", "session_id": "<SESSION_ID>"}`. The reply uses the earlier turns.
+3. New session: omit `session_id`. You get a different `session_id` and no memory of the earlier chat.
+4. Attach the voucher item: `POST /agents/{AGENT_ID}/knowledge/{ITEM_ID}` → `204`. Re-enable it (9.1 PATCH `enabled: true`).
+   Ask `{"message": "Do you sell gift vouchers?"}`: the reply uses the voucher text **without creating a new version**.
+5. `GET /conversations` afterwards: nothing new. Playground chats never reach the inbox or customers.
+
+### 9.4 Improve the agent ("retraining")
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Feedback | `POST /agents/{AGENT_ID}/refine` | `{"feedback": "Always mention free parking"}` | `201`, `version_number: 2`, `source: "feedback"`, `is_active: false` |
+| Test draft | `POST /agents/{AGENT_ID}/playground/chat` | `{"message": "Hi", "version_number": 2}` | answered with the draft (`version_number: 2`) |
+| Activate | `POST /agents/{AGENT_ID}/versions/2/activate` | none | `active_version_number: 2` |
+| Manual edit | `POST /agents/{AGENT_ID}/versions` | `{"greeting_message": "Hello from Glow!"}` | `201`, `version_number: 3`, active; other fields copied from v2 |
+| History | `GET /agents/{AGENT_ID}/versions` | none | versions 3, 2, 1 (newest first), only v3 `is_active` |
+| Roll back | `POST /agents/{AGENT_ID}/versions/1/activate` | none | `active_version_number: 1` |
+| Unknown version | `POST /agents/{AGENT_ID}/versions/99/activate` | none | `404` |
+
+### 9.5 Build a new agent
+1. `POST /agents/profiler/questions` with
+   `{"business_name": "Bright Smile", "business_type": "Dental Clinic", "location": "Kochi"}`
+   → a list of `fields` (question text, `ui_type`, options).
+2. `POST /agents/generate` with
+   ```json
+   {
+     "business_profile": {"business_name": "Bright Smile", "business_type": "Dental Clinic", "location": "Kochi",
+                          "offerings": ["Cleaning", "Braces"], "working_hours": "Mon-Sat 9-6"},
+     "collected_answers": {"top_services": "Cleaning and braces", "booking_method": "Phone"},
+     "agent_setup": {"agent_name": "Smiley", "personality": "calm and reassuring", "rules": ["Never quote surgery prices"]}
+   }
+   ```
+   → `201`, agent **Smiley** with version 1 (`source: "generated"`).
+3. `PATCH /agents/{id}` `{"name": "Front Desk"}` renames it; `DELETE /agents/{id}` → `204`, and it disappears from `GET /agents`.
+
+### 9.6 Error cases
+| Case | Expect |
+|---|---|
+| AI provider down or misconfigured (`LLM_PROVIDER=openai` with a bad key) on generate / questions / refine / chat | `502`, nothing stored; the next chat in the same session still works |
+| Another workspace's agent or knowledge id (use TOKEN_B) | `404` |
+| Attaching another workspace's knowledge item | `404` |
+
+### 9.7 Demo reset restores the AI setup
+`POST /demo/reset` restores the seeded agent (version 1 only) and the 4 knowledge items; agents and items you created are removed.
+The agent gets a **new id** after a reset, so run `GET /agents` again.

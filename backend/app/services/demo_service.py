@@ -10,8 +10,9 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.db.models import Channel, Contact, Conversation, Message, User, Workspace
+from app.db.models import Agent, AgentKnowledge, AgentVersion, Channel, Contact, Conversation, KnowledgeItem, Message, User, Workspace
 from app.db.session import AsyncSessionLocal
+from app.services.agent_service import AgentService
 from app.services.auth_service import AuthService
 from app.services.base import BaseService
 from app.services.channel_service import InboundMessage
@@ -63,13 +64,14 @@ class DemoService(BaseService):
             db.add(Channel(workspace_id=workspace.id, platform=platform, name=f"Demo {platform.title()}", adapter_type="simulated"))
         await db.flush()
         await cls._seed_conversations(db, workspace.id, seed)
+        await cls._seed_ai(db, workspace.id, seed)
         await db.commit()
         logger.info("Demo workspace created; log in with %s", settings.DEMO_EMAIL)
 
     @classmethod
     async def reset(cls, db: AsyncSession, workspace: Workspace) -> None:
         """
-        Restores the demo workspace's contacts, conversations, and messages to the seed state.
+        Restores the demo workspace's contacts, conversations, messages, agent, and knowledge to the seed state.
 
         Args:
             db (AsyncSession): Active asynchronous database session.
@@ -83,7 +85,12 @@ class DemoService(BaseService):
         await db.execute(delete(Message).where(Message.workspace_id == workspace.id))
         await db.execute(delete(Conversation).where(Conversation.workspace_id == workspace.id))
         await db.execute(delete(Contact).where(Contact.workspace_id == workspace.id))
-        await cls._seed_conversations(db, workspace.id, _load_seed())
+        agent_ids = await db.execute(select(Agent.id).where(Agent.workspace_id == workspace.id))
+        await AgentService.delete_agents(db, list(agent_ids.scalars().all()))
+        await db.execute(delete(KnowledgeItem).where(KnowledgeItem.workspace_id == workspace.id))
+        seed = _load_seed()
+        await cls._seed_conversations(db, workspace.id, seed)
+        await cls._seed_ai(db, workspace.id, seed)
         await db.commit()
 
     @classmethod
@@ -149,3 +156,23 @@ class DemoService(BaseService):
                     conversation.unread_count += 1
                 conversation.last_message_at = message.created_at
                 conversation.last_message_preview = message.content[:120]
+
+    @classmethod
+    async def _seed_ai(cls, db: AsyncSession, workspace_id: uuid.UUID, seed: dict) -> None:
+        items = [KnowledgeItem(workspace_id=workspace_id, **item) for item in seed["knowledge"]]
+        spec = seed["agent"]
+        agent = Agent(workspace_id=workspace_id, name=spec["name"], business_profile=spec["business_profile"], active_version_number=1)
+        db.add_all([*items, agent])
+        await db.flush()
+        db.add(AgentVersion(
+            workspace_id=workspace_id,
+            agent_id=agent.id,
+            version_number=1,
+            system_prompt=spec["system_prompt"],
+            greeting_message=spec["greeting_message"],
+            personality=spec["personality"],
+            rules=spec["rules"],
+            skills=[],
+            source="generated",
+        ))
+        db.add_all(AgentKnowledge(agent_id=agent.id, knowledge_item_id=item.id) for item in items)

@@ -63,3 +63,30 @@ def test_reset_restores_seed(client, demo_headers, register):
     assert len(after) == 6
 
     assert client.post(f"{API}/demo/reset", headers=register()).status_code == 403
+
+
+def test_demo_has_ready_agent_with_knowledge(client, demo_headers):
+    agents = client.get(f"{API}/agents", headers=demo_headers).json()
+    assert len(agents) == 1
+    agent = client.get(f"{API}/agents/{agents[0]['id']}", headers=demo_headers).json()
+    knowledge = client.get(f"{API}/knowledge", headers=demo_headers).json()
+    assert len(knowledge) >= 3
+    assert set(agent["knowledge_ids"]) == {item["id"] for item in knowledge}
+
+    chat = client.post(f"{API}/agents/{agent['id']}/playground/chat", json={"message": "What are your prices?"}, headers=demo_headers)
+    assert chat.status_code == 200 and chat.json()["reply"]
+
+
+def test_reset_restores_demo_agent_and_knowledge(client, demo_headers):
+    agent_id = client.get(f"{API}/agents", headers=demo_headers).json()[0]["id"]
+    seeded_prompt = client.get(f"{API}/agents/{agent_id}", headers=demo_headers).json()["active_version"]["system_prompt"]
+    client.post(f"{API}/agents/{agent_id}/versions", json={"system_prompt": "edited"}, headers=demo_headers)
+    client.post(f"{API}/knowledge", json={"title": "Extra", "content": "added during demo"}, headers=demo_headers)
+
+    client.post(f"{API}/demo/reset", headers=demo_headers)
+
+    agents = client.get(f"{API}/agents", headers=demo_headers).json()
+    assert len(agents) == 1 and agents[0]["active_version_number"] == 1
+    agent = client.get(f"{API}/agents/{agents[0]['id']}", headers=demo_headers).json()
+    assert agent["active_version"]["system_prompt"] == seeded_prompt
+    assert not any(k["title"] == "Extra" for k in client.get(f"{API}/knowledge", headers=demo_headers).json())

@@ -12,6 +12,7 @@ _db_dir = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{Path(_db_dir) / 'test.db'}"
 os.environ["DEMO_MODE"] = "true"
 os.environ["DEMO_REPLY_DELAY_SECONDS"] = "0"
+os.environ["LLM_PROVIDER"] = "fake"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,3 +78,27 @@ def demo_headers(client):
     response = client.post(f"{API}/auth/login", json={"email": settings.DEMO_EMAIL, "password": settings.DEMO_PASSWORD})
     assert response.status_code == 200, response.text
     return auth_headers(response.json()["access_token"])
+
+
+@pytest.fixture
+def llm_calls(monkeypatch):
+    """Records every LLM call (messages, schema) while still using the fake provider."""
+    from app.providers import llm
+    calls = []
+    original = llm.complete
+
+    async def spy(messages, schema=None):
+        calls.append({"messages": messages, "schema": schema})
+        return await original(messages, schema)
+    monkeypatch.setattr(llm, "complete", spy)
+    return calls
+
+
+@pytest.fixture
+def llm_down(monkeypatch):
+    """Makes every LLM call fail like an unavailable provider."""
+    from app.providers import llm
+
+    async def fail(messages, schema=None):
+        raise llm.LLMError("provider down")
+    monkeypatch.setattr(llm, "complete", fail)

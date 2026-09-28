@@ -1,6 +1,10 @@
 {
-  "workspace": { "name": "Glow Salon & Spa (Demo)" },
-  "user": { "name": "Demo Owner" },
+  "workspace": {
+    "name": "Glow Salon & Spa (Demo)"
+  },
+  "user": {
+    "name": "Demo Owner"
+  },
   "replies": [
     "Thanks! That works for me 👍",
     "Great, see you then!",
@@ -12,58 +16,196 @@
     {
       "platform": "whatsapp",
       "customer_id": "+919876543210",
-      "contact": { "name": "Rahul Kumar", "avatar": "https://i.pravatar.cc/150?u=rahul", "phone": "+91 98765 43210", "email": "rahul@example.com" },
+      "contact": {
+        "name": "Rahul Kumar",
+        "avatar": "https://i.pravatar.cc/150?u=rahul",
+        "phone": "+91 98765 43210",
+        "email": "rahul@example.com"
+      },
       "messages": [
-        { "direction": "inbound", "content": "Hi! Do you have a slot for a haircut tomorrow evening?", "minutes_ago": 42, "status": "read" },
-        { "direction": "outbound", "content": "Hi Rahul! We have 6:00 PM and 7:30 PM open. Which works for you?", "minutes_ago": 38, "status": "read" },
-        { "direction": "inbound", "content": "7:30 please", "minutes_ago": 6, "status": "delivered" },
-        { "direction": "inbound", "content": "Also, how much is a beard trim with it?", "minutes_ago": 5, "status": "delivered" }
+        {
+          "direction": "inbound",
+          "content": "Hi! Do you have a slot for a haircut tomorrow evening?",
+          "minutes_ago": 42,
+          "status": "read"
+        },
+        {
+          "direction": "outbound",
+          "content": "Hi Rahul! We have 6:00 PM and 7:30 PM open. Which works for you?",
+          "minutes_ago": 38,
+          "status": "read"
+        },
+        {
+          "direction": "inbound",
+          "content": "7:30 please",
+          "minutes_ago": 6,
+          "status": "delivered"
+        },
+        {
+          "direction": "inbound",
+          "content": "Also, how much is a beard trim with it?",
+          "minutes_ago": 5,
+          "status": "delivered"
+        }
       ]
     },
     {
       "platform": "whatsapp",
       "customer_id": "+919811122233",
-      "contact": { "name": "Priya Singh", "avatar": "https://i.pravatar.cc/150?u=priya", "phone": "+91 98111 22233" },
+      "contact": {
+        "name": "Priya Singh",
+        "avatar": "https://i.pravatar.cc/150?u=priya",
+        "phone": "+91 98111 22233"
+      },
       "messages": [
-        { "direction": "inbound", "content": "Is the bridal makeup package available in December?", "minutes_ago": 180, "status": "delivered" }
+        {
+          "direction": "inbound",
+          "content": "Is the bridal makeup package available in December?",
+          "minutes_ago": 180,
+          "status": "delivered"
+        }
       ]
     },
     {
       "platform": "instagram",
       "customer_id": "ig_sarah_designs",
-      "contact": { "name": "Sarah", "username": "@sarah_designs", "avatar": "https://i.pravatar.cc/150?u=sarah", "email": "sarah@designs.com" },
+      "contact": {
+        "name": "Sarah",
+        "username": "@sarah_designs",
+        "avatar": "https://i.pravatar.cc/150?u=sarah",
+        "email": "sarah@designs.com"
+      },
       "messages": [
-        { "direction": "inbound", "content": "Loved the balayage in your latest reel 😍 what does it cost?", "minutes_ago": 65, "status": "read" },
-        { "direction": "outbound", "content": "Thank you Sarah! Balayage starts at ₹4,500 depending on length.", "minutes_ago": 60, "status": "read" },
-        { "direction": "inbound", "content": "Can I book for Saturday?", "minutes_ago": 58, "status": "delivered" }
+        {
+          "direction": "inbound",
+          "content": "Loved the balayage in your latest reel 😍 what does it cost?",
+          "minutes_ago": 65,
+          "status": "read"
+        },
+        {
+          "direction": "outbound",
+          "content": "Thank you Sarah! Balayage starts at ₹4,500 depending on length.",
+          "minutes_ago": 60,
+          "status": "read"
+        },
+        {
+          "direction": "inbound",
+          "content": "Can I book for Saturday?",
+          "minutes_ago": 58,
+          "status": "delivered"
+        }
       ]
     },
     {
       "platform": "instagram",
       "customer_id": "ig_mark_smith",
-      "contact": { "name": "Mark Smith", "username": "@mark.smith", "avatar": "https://i.pravatar.cc/150?u=mark" },
+      "contact": {
+        "name": "Mark Smith",
+        "username": "@mark.smith",
+        "avatar": "https://i.pravatar.cc/150?u=mark"
+      },
       "messages": [
-        { "direction": "inbound", "content": "Do you do walk-ins on Sundays?", "minutes_ago": 1440, "status": "read" },
-        { "direction": "outbound", "content": "Yes! Sundays 10 AM to 4 PM, walk-ins welcome.", "minutes_ago": 1400, "status": "read" }
+        {
+          "direction": "inbound",
+          "content": "Do you do walk-ins on Sundays?",
+          "minutes_ago": 1440,
+          "status": "read"
+        },
+        {
+          "direction": "outbound",
+          "content": "Yes! Sundays 10 AM to 4 PM, walk-ins welcome.",
+          "minutes_ago": 1400,
+          "status": "read"
+        }
       ]
     },
     {
       "platform": "messenger",
       "customer_id": "fb_alex_1001",
-      "contact": { "name": "Alex", "avatar": "https://i.pravatar.cc/150?u=alex", "email": "alex@company.com" },
+      "contact": {
+        "name": "Alex",
+        "avatar": "https://i.pravatar.cc/150?u=alex",
+        "email": "alex@company.com"
+      },
       "messages": [
-        { "direction": "inbound", "content": "Do you offer corporate gift vouchers?", "minutes_ago": 300, "status": "delivered" }
+        {
+          "direction": "inbound",
+          "content": "Do you offer corporate gift vouchers?",
+          "minutes_ago": 300,
+          "status": "delivered"
+        }
       ]
     },
     {
       "platform": "messenger",
       "customer_id": "fb_diana_2002",
-      "contact": { "name": "Diana", "avatar": "https://i.pravatar.cc/150?u=diana" },
+      "contact": {
+        "name": "Diana",
+        "avatar": "https://i.pravatar.cc/150?u=diana"
+      },
       "status": "closed",
       "messages": [
-        { "direction": "inbound", "content": "Thanks for the great facial yesterday!", "minutes_ago": 2880, "status": "read" },
-        { "direction": "outbound", "content": "So glad you enjoyed it, Diana! See you next time 💆", "minutes_ago": 2870, "status": "read" }
+        {
+          "direction": "inbound",
+          "content": "Thanks for the great facial yesterday!",
+          "minutes_ago": 2880,
+          "status": "read"
+        },
+        {
+          "direction": "outbound",
+          "content": "So glad you enjoyed it, Diana! See you next time 💆",
+          "minutes_ago": 2870,
+          "status": "read"
+        }
       ]
     }
-  ]
+  ],
+  "knowledge": [
+    {
+      "title": "About Us",
+      "category": "General",
+      "description": "Who we are and where to find us.",
+      "content": "Glow Salon & Spa opened in 2018 in Panampilly Nagar, Kochi. We are a team of 12 stylists and therapists. Free parking is available behind the building. Open Monday to Saturday 10 AM to 8 PM, Sunday 10 AM to 4 PM (walk-ins welcome on Sundays)."
+    },
+    {
+      "title": "Brand Tone",
+      "category": "Formatting",
+      "description": "How we talk to customers.",
+      "content": "Warm, friendly, and professional. Address customers by first name. Keep replies short. Use at most one emoji per message. Never pressure customers into booking."
+    },
+    {
+      "title": "Pricing",
+      "category": "Sales",
+      "description": "Current service prices.",
+      "content": "Haircut: 500 INR (men), 800 INR (women). Beard trim: 250 INR. Balayage: from 4,500 INR depending on length. Facial: 1,500 INR. Manicure: 600 INR. Bridal makeup package: 18,000 INR, book at least 4 weeks ahead."
+    },
+    {
+      "title": "Booking Policy",
+      "category": "Policies",
+      "description": "Appointments and cancellations.",
+      "content": "Appointments can be booked by chat, phone (+91 484 400 1234), or walk-in. Please cancel at least 4 hours ahead. Late arrivals over 15 minutes may need to be rescheduled."
+    }
+  ],
+  "agent": {
+    "name": "Glow Assistant",
+    "business_profile": {
+      "business_name": "Glow Salon & Spa",
+      "business_type": "Salon and Spa",
+      "location": "Kochi",
+      "offerings": [
+        "Haircuts",
+        "Coloring",
+        "Facials",
+        "Bridal makeup"
+      ],
+      "working_hours": "Mon-Sat 10-8, Sun 10-4"
+    },
+    "personality": "warm and friendly",
+    "rules": [
+      "Never promise a slot without confirming availability",
+      "Offer the bridal consultation for wedding enquiries"
+    ],
+    "greeting_message": "Hi! Welcome to Glow Salon & Spa 💇 How can I help you today?",
+    "system_prompt": "You are Glow Assistant, the AI customer service agent for Glow Salon & Spa.\n\nYour job is to answer questions about services and prices, help customers book appointments, and make them feel welcome.\n\n### Rules\n* Be warm and friendly, concise, and conversational.\n* Reply in the customer's language.\n* Use only verified business information. Never guess prices or availability.\n* Never promise a slot without confirming availability.\n* Offer the bridal consultation for wedding enquiries.\n* Escalate to a human when the customer asks for one or you cannot help.\n\n### Business Information\n- **Business Name**: Glow Salon & Spa\n- **Type**: Salon and Spa\n- **Location**: Panampilly Nagar, Kochi\n- **Working Hours**: Mon-Sat 10 AM-8 PM, Sun 10 AM-4 PM\n- **Offerings & Services**: Haircuts, coloring, facials, bridal makeup"
+  }
 }

@@ -88,6 +88,70 @@ await step('8. data survives a reload (it lives in the backend)', async () => {
   await page.getByText('Simulated incoming message').first().waitFor();
 });
 
+// --- AI playground (add-ai-agents) ---
+const chat = async text => {
+  const before = await page.locator('.bg-white.rounded-tl-none').count();
+  await page.getByPlaceholder('Message', { exact: true }).fill(text);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(n => document.querySelectorAll('.bg-white.rounded-tl-none').length > n, before, { timeout: 10000 });
+  return page.locator('.bg-white.rounded-tl-none').last().innerText();
+};
+
+await step('P1. playground opens the seeded demo agent with its greeting', async () => {
+  await page.goto(`${UI}/ai-playground`);
+  await page.getByLabel('Agent').filter({ hasText: 'Glow Assistant' }).waitFor();
+  await page.getByText('Welcome to Glow Salon & Spa').first().waitFor();
+});
+
+await step('P2. chatting uses the agent knowledge', async () => {
+  assert.match(await chat('What is your pricing for a haircut?'), /Haircut: 500 INR/);
+  await page.screenshot({ path: SHOTS + 'P2-playground-chat.png' });
+});
+
+await step('P3. feedback creates a draft version that is tested first', async () => {
+  await page.getByLabel('Feedback').fill('Always mention free parking');
+  await page.getByText('Create draft').click();
+  await page.getByRole('status').getByText('Draft v2 is ready').waitFor();
+  await page.getByText('testing draft v2').waitFor();
+  const agent = (await api('/agents', {}, token))[0];
+  assert.equal(agent.active_version_number, 1);
+});
+
+await step('P4. activating the draft makes it live', async () => {
+  await page.getByLabel('Activate v2').click();
+  await page.getByRole('status').getByText('v2 is now live').waitFor();
+  assert.equal((await api('/agents', {}, token))[0].active_version_number, 2);
+});
+
+await step('P5. a new custom skill is used on the next answer', async () => {
+  await page.getByText('Connectors and skills').click();
+  await page.getByText('Create New').click();
+  await page.getByLabel('Skill title').fill('Gift Vouchers');
+  await page.getByLabel('Skill content').fill('Vouchers from 1,000 INR, valid for one year.');
+  await page.getByText('Add skill').click();
+  await page.getByLabel('Use Gift Vouchers').waitFor();
+  assert.equal(await page.getByLabel('Use Gift Vouchers').isChecked(), true);
+  await page.screenshot({ path: SHOTS + 'P5-skills.png' });
+  await page.locator('h2:has-text("Integrations Marketplace") + button').click();
+  assert.match(await chat('Do you sell gift vouchers?'), /Vouchers from 1,000 INR/);
+});
+
+await step('P6. building a new agent from a business profile', async () => {
+  await page.getByText('New agent').click();
+  await page.getByLabel('Business name').fill('Bright Smile');
+  await page.getByLabel('Business type').fill('Dental Clinic');
+  await page.getByText('Next', { exact: true }).click();
+  await page.getByText('Which services does your Dental Clinic get asked about most?').waitFor();
+  await page.locator('textarea[required]').first().fill('Cleaning and braces');
+  await page.locator('select[required]').first().selectOption('Phone');
+  await page.getByLabel('Agent name').fill('Smiley');
+  await page.screenshot({ path: SHOTS + 'P6-builder.png' });
+  await page.getByText('Generate agent').click();
+  await page.getByRole('status').getByText('Smiley is ready').waitFor();
+  await page.getByText('Hello! Welcome to Bright Smile').first().waitFor();
+  assert.equal((await api('/agents', {}, token)).length, 2);
+});
+
 await step('9. reset demo restores the seed', async () => {
   await page.goto(`${UI}/inbox`);
   await page.getByText('Meera').first().waitFor();
@@ -97,6 +161,9 @@ await step('9. reset demo restores the seed', async () => {
   await page.getByText('Rahul Kumar').first().waitFor();
   const conversations = await api('/conversations', {}, token);
   assert.equal(conversations.length, 6);
+  const agents = await api('/agents', {}, token);
+  assert.equal(agents.length, 1);
+  assert.equal(agents[0].active_version_number, 1);
   await page.screenshot({ path: SHOTS + '9-reset.png' });
 });
 
