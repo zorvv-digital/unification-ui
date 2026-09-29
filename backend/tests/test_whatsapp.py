@@ -46,6 +46,8 @@ def graph(monkeypatch):
         if request.method == "POST" and path.endswith(f"/{PHONE_ID}/messages"):
             if state["send_error"]:
                 return httpx.Response(400, json={"error": {"message": state["send_error"]}})
+            if state.get("revoked"):
+                return httpx.Response(401, json={"error": {"message": "Session has expired", "type": "OAuthException", "code": 190}})
             return httpx.Response(200, json={"messages": [{"id": f"wamid.out{len(state['requests'])}"}]})
         if request.method == "GET" and path.endswith(f"/{WABA_ID}/message_templates"):
             return httpx.Response(200, json={"data": TEMPLATES})
@@ -219,6 +221,14 @@ def test_meta_send_error_marks_message_failed(client, register, graph):
     headers, _, conversation_id = _connected(client, register, graph)
     graph["send_error"] = "Recipient phone number not in allowed list"
     assert _send(client, headers, conversation_id).json()["status"] == "failed"
+
+
+def test_expired_token_disconnects_number(client, register, graph):
+    headers, channel_id, conversation_id = _connected(client, register, graph)
+    graph["revoked"] = True
+    assert _send(client, headers, conversation_id).json()["status"] == "failed"
+    assert client.get(f"{API}/channels", headers=headers).json()[0]["status"] == "disconnected"
+    assert _send(client, headers, conversation_id).status_code == 409
 
 
 def _age_inbound(client, conversation_id, hours):

@@ -377,3 +377,50 @@ WhatsApp only allows free-form replies within 24 hours of the customer's last me
 credentials are deleted, the conversations stay readable, new webhook events get `410`, and sending gets `409`.
 In the demo workspace, `POST /demo/reset` removes connected numbers entirely.
 
+
+## 12. Messenger and Instagram (Messenger Platform)
+
+Connect a Facebook Page, plus the Instagram professional account linked to it. You need an app in **Meta for Developers**
+with the **Messenger** and **Instagram** products and messaging permissions (`pages_messaging`, `instagram_manage_messages`):
+- **Messenger → Settings → Access tokens** gives the *Page ID* and a *Page access token*.
+- **App settings → Basic** gives the *App secret*.
+
+As for WhatsApp, Meta must reach your server (`PUBLIC_BASE_URL`, e.g. via ngrok). Without a Meta account, run the E2E mock
+(port 8765, Page token `e2e-page-token`, Page ID `112233445566`) with the backend on `META_GRAPH_URL=http://127.0.0.1:8765`,
+or the automated tests (`tests/test_meta_channels.py`).
+
+### 12.1 Connect
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Connect | `POST /channels/meta` | `{"page_id": "...", "page_access_token": "...", "app_secret": "..."}` | `201`, a list: a `messenger` channel named after the Page and, if the Page has a linked Instagram account, an `instagram` channel named `@username`. Each has its own `webhook_url` and `verify_token`. Copy the ids (MS_ID, IG_ID) |
+| Page without Instagram | same | | only the `messenger` channel |
+| Wrong token | a bad `page_access_token` | | `400` "Meta rejected this Page token: ...", nothing saved |
+| Reconnect | the same request again | | the same channel ids and verify tokens, `status: "connected"` (no duplicates) |
+
+In the Meta App Dashboard register **both** webhooks and subscribe each to **messages**:
+- **Messenger → Settings → Webhooks** (object *Page*): the Messenger `webhook_url` and `verify_token`; then subscribe the Page.
+- **Instagram → Settings → Webhooks**: the Instagram `webhook_url` and `verify_token`.
+
+The handshake works as in §11.1: `GET /webhooks/{MS_ID}?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=123` → `123`, a wrong token → `403`.
+
+### 12.2 Receive
+Message the Page on Messenger, or the Instagram account by DM. The conversation appears in `GET /conversations` with
+`platform: "messenger"` / `"instagram"`, `external_id` = the Page- or Instagram-scoped id, and the sender's name
+looked up from Meta (the id when Meta won't share it). Photos, video, audio and files arrive as `[image]`, `[video]`, ...
+Replies you send from Meta Business Suite (echoes), read receipts, and stickers are ignored.
+Unsigned posts from Swagger get `401`.
+
+### 12.3 Reply and the 24-hour window
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Reply | `POST /conversations/{id}/messages` | `{"content": "Hi! How can we help?"}` | `201`, `status: "sent"`, `external_id` = Meta's `mid`; the reply arrives in Messenger / Instagram |
+| Media | same | `{"content": "https://.../menu.pdf", "type": "file"}` | sent as an attachment |
+| Window closed | reply 24 h+ after the customer's last message | | `409` "The 24-hour customer service window is closed. Wait for the customer to write again." Nothing sent |
+| Meta refuses | e.g. a user who blocked the Page | | `201` with `status: "failed"`; the channel stays connected |
+
+### 12.4 Expired or revoked token
+Revoke the app's access (Facebook → Settings → Business integrations) or let a short-lived token expire, then reply:
+`201` with `status: "failed"`, the channel shows `status: "disconnected"` in `GET /channels`, and a live
+`channel.updated` event is sent. Further replies get `409` and inbound events `410`. Repeat **Connect** (§12.1) with a
+fresh token: the same channels come back as `connected` with unchanged webhook URLs. The same applies to WhatsApp numbers
+whose token expires. `DELETE /channels/{id}` disconnects deliberately, as in §11.5.

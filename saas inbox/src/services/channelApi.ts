@@ -6,7 +6,7 @@ export interface Channel {
   id: string;
   platform: string;
   name: string;
-  adapter_type: 'simulated' | 'whatsapp' | string;
+  adapter_type: 'simulated' | 'whatsapp' | 'messenger' | 'instagram' | string;
   status: 'connected' | 'disconnected' | string;
   ai_enabled: boolean;
   ai_agent_id: string | null;
@@ -21,6 +21,12 @@ export interface WhatsAppCredentials {
   phone_number_id: string;
   waba_id: string;
   access_token: string;
+  app_secret: string;
+}
+
+export interface MetaCredentials {
+  page_id: string;
+  page_access_token: string;
   app_secret: string;
 }
 
@@ -41,6 +47,8 @@ export const channelApi = {
   listChannels: () => api().request<Channel[]>('/channels'),
   connectWhatsApp: (credentials: WhatsAppCredentials) =>
     api().request<Channel & WebhookInfo>('/channels/whatsapp', { method: 'POST', body: JSON.stringify(credentials) }),
+  connectMeta: (credentials: MetaCredentials) =>
+    api().request<(Channel & WebhookInfo)[]>('/channels/meta', { method: 'POST', body: JSON.stringify(credentials) }),
   webhookInfo: (id: string) => api().request<WebhookInfo>(`/channels/${id}/webhook`),
   disconnect: (id: string) => api().request<void>(`/channels/${id}`, { method: 'DELETE' }),
   listTemplates: (id: string) => api().request<Template[]>(`/channels/${id}/templates`),

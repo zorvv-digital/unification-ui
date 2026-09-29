@@ -112,7 +112,7 @@ export function messagingReducer(state: MessagingState, action: MessagingAction)
 export interface MessagingContextValue extends MessagingState {
   getConversations: (platform?: string) => Conversation[];
   getMessages: (conversationId: string) => Message[];
-  sendMessage: (conversationId: string, content: string, type: Message['type']) => Promise<void>;
+  sendMessage: (conversationId: string, content: string, type: Message['type']) => Promise<Message>;
   receiveMessage: (conversationId: string, content: string, type: Message['type']) => Promise<void>;
   markAsRead: (conversationId: string) => Promise<void>;
 }
@@ -175,6 +175,7 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
     sendMessage: async (conversationId: string, content: string, type: Message['type']) => {
       const msg = await (apiService ?? mockService).sendMessage(conversationId, content, type);
       dispatch({ type: 'MESSAGE_SENT', payload: msg });
+      return msg;
     },
 
     receiveMessage: async (conversationId: string, content: string, type: Message['type']) => {

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Info, Phone, Video, Image, Heart, Send } from 'lucide-react';
-import { useMessaging } from '../context/MessagingContext';
+import { apiService, useMessaging } from '../context/MessagingContext';
 import { Avatar } from '../components/messaging/Avatar';
+import { MetaPagesModal } from '../components/channels/MetaPagesModal';
+import { useChannelSend } from '../hooks/useChannelSend';
 
 export default function Instagram() {
-  const { getConversations, getMessages, contacts, sendMessage, receiveMessage, markAsRead } = useMessaging();
+  const { getConversations, getMessages, contacts, receiveMessage, markAsRead } = useMessaging();
   
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -14,6 +16,8 @@ export default function Instagram() {
   
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeContact = activeConversation ? contacts.find(c => c.id === activeConversation.contactId) : null;
+  const { sendError, send, reload, isSimulated } = useChannelSend(activeConversation);
+  const [pagesOpen, setPagesOpen] = useState(false);
 
   useEffect(() => {
     if (activeConversationId) {
@@ -22,8 +26,7 @@ export default function Instagram() {
   }, [activeConversationId, activeMessages.length, markAsRead]);
 
   const handleSend = async () => {
-    if (messageText.trim() && activeConversationId) {
-      await sendMessage(activeConversationId, messageText.trim(), 'text');
+    if (messageText.trim() && activeConversationId && (await send(messageText.trim()))) {
       setMessageText('');
     }
   };
@@ -47,7 +50,14 @@ export default function Instagram() {
       <div className="w-[350px] flex flex-col border-r border-gray-200 shrink-0">
         <div className="px-5 pt-6 pb-4 flex items-center justify-between">
           <h1 className="text-xl font-bold">johndoe</h1>
-          <button className="text-black font-semibold text-2xl mb-2">...</button>
+          <button
+            aria-label="Facebook Page & Instagram"
+            title="Facebook Page & Instagram"
+            onClick={() => apiService && setPagesOpen(true)}
+            className="text-black font-semibold text-2xl mb-2"
+          >
+            ...
+          </button>
         </div>
         
         <div className="px-5 pb-4">
@@ -98,7 +108,7 @@ export default function Instagram() {
                 </div>
               </div>
               <div className="flex gap-4 items-center">
-                <button onClick={handleReceiveSimulated} className="text-sm border px-2 py-1 rounded">Simulate</button>
+                {isSimulated && <button onClick={handleReceiveSimulated} className="text-sm border px-2 py-1 rounded">Simulate</button>}
                 <Phone size={24} className="text-black" />
                 <Video size={26} className="text-black" />
                 <Info size={24} className="text-black" />
@@ -131,6 +141,10 @@ export default function Instagram() {
                 );
               })}
             </div>
+
+            {sendError && (
+              <div role="alert" className="mx-4 mt-2 rounded-lg bg-[#fff4e5] border border-[#ffd8a8] px-4 py-2 text-sm text-[#8a4b00]">{sendError}</div>
+            )}
 
             <div className="p-4">
               <div className="border border-gray-300 rounded-full flex items-center px-4 py-2">
@@ -165,6 +179,8 @@ export default function Instagram() {
           </div>
         )}
       </div>
+
+      {pagesOpen && <MetaPagesModal onClose={() => setPagesOpen(false)} onChanged={reload} />}
     </div>
   );
 }

@@ -22,14 +22,26 @@ const api = async (path, init = {}, token) => {
 
 // --- Mock Meta Graph API (WhatsApp Cloud API) ---
 const WA = { phoneId: '109876543210', wabaId: '208765432109', token: 'e2e-good-token', secret: 'e2e-app-secret', customer: '919800033333' };
+const META = { pageId: '112233445566', igId: '17841400000000001', token: 'e2e-page-token', secret: 'e2e-meta-secret', igsid: '8000000000000001' };
 const graphSends = [];
+let metaRevoked = false;
 const graph = http.createServer((req, res) => {
   let body = '';
   req.on('data', chunk => (body += chunk));
   req.on('end', () => {
     const reply = (code, data) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
-    if (req.headers.authorization !== `Bearer ${WA.token}`) return reply(401, { error: { message: 'Invalid OAuth access token.' } });
     const path = new URL(req.url, 'http://graph').pathname;
+    if (req.headers.authorization === `Bearer ${META.token}`) {
+      if (metaRevoked) return reply(400, { error: { message: 'Error validating access token: The session has been invalidated', type: 'OAuthException', code: 190 } });
+      if (req.method === 'GET' && path === `/${META.pageId}`) return reply(200, { id: META.pageId, name: 'Glow Salon Page', instagram_business_account: { id: META.igId, username: 'glowsalon' } });
+      if (req.method === 'GET' && path === `/${META.igsid}`) return reply(200, { id: META.igsid, name: 'Arjun Mehta' });
+      if (req.method === 'POST' && path === `/${META.pageId}/messages`) {
+        graphSends.push(JSON.parse(body));
+        return reply(200, { recipient_id: META.igsid, message_id: `m_e2e${graphSends.length}` });
+      }
+      return reply(404, { error: { message: 'Unknown path', code: 803 } });
+    }
+    if (req.headers.authorization !== `Bearer ${WA.token}`) return reply(401, { error: { message: 'Invalid OAuth access token.' } });
     if (req.method === 'GET' && path === `/${WA.phoneId}`) return reply(200, { id: WA.phoneId, display_phone_number: '+91 98000 22222' });
     if (req.method === 'POST' && path === `/${WA.phoneId}/messages`) {
       graphSends.push(JSON.parse(body));
@@ -46,6 +58,15 @@ const graph = http.createServer((req, res) => {
 const metaEvent = (channelId, value) => {
   const raw = JSON.stringify({ object: 'whatsapp_business_account', entry: [{ id: WA.wabaId, changes: [{ field: 'messages', value }] }] });
   const signature = 'sha256=' + crypto.createHmac('sha256', WA.secret).update(raw).digest('hex');
+  return fetch(`${API}/webhooks/${channelId}`, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature } });
+};
+
+// Posts a signed Instagram DM webhook event, like Meta does.
+const instagramDm = (channelId, mid, text) => {
+  const raw = JSON.stringify({ object: 'instagram', entry: [{ id: META.igId, time: 1727600000, messaging: [
+    { sender: { id: META.igsid }, recipient: { id: META.igId }, timestamp: 1727600000, message: { mid, text } },
+  ] }] });
+  const signature = 'sha256=' + crypto.createHmac('sha256', META.secret).update(raw).digest('hex');
   return fetch(`${API}/webhooks/${channelId}`, { method: 'POST', body: raw, headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature } });
 };
 
@@ -274,6 +295,78 @@ await step('W7. disconnecting keeps the chat and rejects new events', async () =
   await page.getByText('Hi from real WhatsApp').last().waitFor();
   const res = await metaEvent(waChannel.id, { messaging_product: 'whatsapp', messages: [] });
   assert.equal(res.status, 410);
+});
+
+// --- Messenger and Instagram (add-meta-channels) ---
+let igChannel;
+const connectPage = async pageToken => {
+  await page.getByLabel('Page ID').fill(META.pageId);
+  await page.getByLabel('Page access token').fill(pageToken);
+  await page.getByLabel('App secret').fill(META.secret);
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+};
+
+await step('M1. connecting a Page with a token Meta rejects shows the error', async () => {
+  await page.goto(`${UI}/messenger`);
+  await page.getByLabel('Facebook Page & Instagram').click();
+  await page.getByText('Demo channel (simulated)').first().waitFor();
+  await connectPage('wrong-token');
+  await page.getByRole('alert').getByText('Meta rejected this Page token').waitFor();
+  assert.deepEqual(errors.splice(0).filter(e => !e.includes('400') && !e.includes('401')), []);
+});
+
+await step('M2. a valid Page token connects Messenger and the linked Instagram account', async () => {
+  await connectPage(META.token);
+  await page.getByRole('status').getByText('Connected!').waitFor();
+  const channels = await api('/channels', {}, token);
+  const messenger = channels.find(c => c.adapter_type === 'messenger');
+  igChannel = channels.find(c => c.adapter_type === 'instagram');
+  assert.equal(await page.getByLabel('Messenger webhook URL').inputValue(), `http://localhost:8000/api/v1/webhooks/${messenger.id}`);
+  assert.equal(await page.getByLabel('Instagram webhook URL').inputValue(), `http://localhost:8000/api/v1/webhooks/${igChannel.id}`);
+  await page.getByText('@glowsalon').waitFor();
+  await page.getByText('Instagram · Connected').waitFor();
+  await page.screenshot({ path: SHOTS + 'M2-meta-connected.png' });
+  await page.getByLabel('Close').click();
+});
+
+await step('M3. a signed Instagram DM appears live with the customer name from Meta', async () => {
+  await page.goto(`${UI}/instagram`);
+  assert.equal((await instagramDm(igChannel.id, 'm_in_e2e_1', 'Do you have a slot tomorrow?')).status, 200);
+  await page.getByText('Arjun Mehta').first().click();
+  await page.getByText('Do you have a slot tomorrow?').last().waitFor();
+  assert.equal(await page.getByText('Simulate', { exact: true }).count(), 0);
+});
+
+await step('M4. a reply goes out through the Messenger Platform', async () => {
+  await page.getByPlaceholder('Message...').fill('Yes, 11am is free!');
+  await page.keyboard.press('Enter');
+  await page.getByText('Yes, 11am is free!').last().waitFor();
+  assert.deepEqual(graphSends.at(-1), { recipient: { id: META.igsid }, messaging_type: 'RESPONSE', message: { text: 'Yes, 11am is free!' } });
+  await page.screenshot({ path: SHOTS + 'M4-instagram-reply.png' });
+});
+
+await step('M5. a revoked Page token fails the send and disconnects the channel', async () => {
+  metaRevoked = true;
+  await page.getByPlaceholder('Message...').fill('Are you still there?');
+  await page.keyboard.press('Enter');
+  await page.getByRole('alert').getByText('expired or was revoked').waitFor();
+  assert.equal((await api('/channels', {}, token)).find(c => c.id === igChannel.id).status, 'disconnected');
+  await page.screenshot({ path: SHOTS + 'M5-token-revoked.png' });
+});
+
+await step('M6. reconnecting the Page reuses the channel and sending works again', async () => {
+  metaRevoked = false;
+  await page.getByLabel('Facebook Page & Instagram').click();
+  await page.getByText('Instagram · Disconnected').waitFor();
+  await connectPage(META.token);
+  await page.getByText('Instagram · Connected').waitFor();
+  assert.equal(await page.getByLabel('Instagram webhook URL').inputValue(), `http://localhost:8000/api/v1/webhooks/${igChannel.id}`);
+  await page.getByLabel('Close').click();
+  await page.getByPlaceholder('Message...').fill('Sorry, we are back!');
+  await page.keyboard.press('Enter');
+  await page.getByText('Sorry, we are back!').last().waitFor();
+  assert.equal(graphSends.at(-1).message.text, 'Sorry, we are back!');
+  assert.equal(await page.getByRole('alert').count(), 0);
 });
 
 // --- AI playground (add-ai-agents) ---

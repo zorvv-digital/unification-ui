@@ -86,6 +86,13 @@ class WhatsAppConnect(BaseModel):
     name: Optional[str] = Field(None, max_length=255)
 
 
+class MetaConnect(BaseModel):
+    """A Facebook Page's access token (with messaging permissions) and the Meta app secret that signs webhooks."""
+    page_id: str = Field(min_length=1, max_length=64)
+    page_access_token: str = Field(min_length=1)
+    app_secret: str = Field(min_length=1)
+
+
 class WebhookInfo(BaseModel):
     """Values to paste into Meta's webhook configuration."""
     webhook_url: str

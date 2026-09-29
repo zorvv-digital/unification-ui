@@ -2,7 +2,7 @@
 
 How to run the platform locally and walk through the demo as a business user would.
 The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend with
-`META_GRAPH_URL=http://127.0.0.1:8765` for it, see §10).
+`META_GRAPH_URL=http://127.0.0.1:8765` for it, see §10 and §11).
 
 ## 0. Run both apps
 
@@ -151,7 +151,26 @@ The demo's own number is listed as *Demo number (simulated)*.
 > The automated E2E (`npm run e2e`) runs this whole flow against a mock Meta API it starts on port 8765.
 > Start the backend for it with `META_GRAPH_URL=http://127.0.0.1:8765`.
 
-## 11. Sign out
+## 11. Connect a Facebook Page and Instagram
+
+Open **Messenger** (click **⋯** next to *Chats*) or **Instagram** (click **...** next to the account name): the
+**Facebook Page & Instagram** window opens. The demo channels are listed as *Demo channel (simulated)*.
+
+1. **Connect.** Enter the *Page ID*, *Page access token* and *App secret* from your Meta app (see `docs/api-testing-swagger.md` §12)
+   → **Connect**. A wrong token shows "Meta rejected this Page token"; nothing is saved.
+2. **Register the webhooks.** The Page appears as *Messenger · Connected* and its linked Instagram account as
+   *@username, Instagram · Connected*. The green box shows a **Messenger webhook URL** (register under Messenger → Webhooks)
+   and an **Instagram webhook URL** (Instagram → Webhooks), each with its verify token. Subscribe both to **messages**.
+3. **Chat.** Messenger messages and Instagram DMs appear live on their pages and in the Inbox, under the customer's name.
+   Replies go out through Meta. Real channels have no **Simulate** button. More than 24 hours after the customer's last
+   message, an orange bar explains that the window is closed.
+4. **Expired token.** If Meta rejects the Page token when you reply, the message fails and the orange bar says
+   *"This Page's access token expired or was revoked. Reconnect the Page from the ⋯ menu."* The channel shows
+   *Disconnected*. Enter a fresh token in the same window → **Connect**: the channels are connected again with the same
+   webhook URLs, so nothing changes in Meta.
+5. **Disconnect.** Click **Disconnect** next to a channel and confirm. **Reset demo data** removes connected Pages from the demo workspace.
+
+## 12. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 
@@ -160,5 +179,5 @@ Click the **log-out icon** next to your name. You return to **Sign in**.
 ## Registering a real business
 
 There is no sign-up screen yet. Create a workspace with `POST /auth/register` in Swagger, then sign in with that email.
-A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10; Instagram, Messenger,
-Gmail and website chat are connected in later changes.
+A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10 and a Facebook Page with
+Instagram as in §11; Gmail and website chat are connected in later changes.

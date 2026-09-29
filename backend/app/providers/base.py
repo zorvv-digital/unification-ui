@@ -4,7 +4,8 @@ Channel adapter contract shared by the inbox and every channel provider.
 Required: `send(channel, conversation, message) -> external_id` and
 `parse_webhook(channel, headers, raw_body) -> list[InboundMessage | StatusUpdate]`.
 Optional, used when present: `verify_subscription(channel, mode, token, challenge) -> str`,
-`session_window: timedelta`, `list_templates(channel)`, and `send_template(channel, conversation, template, parameters)`.
+`session_window: timedelta`, `list_templates(channel)`, `send_template(channel, conversation, template, parameters)`,
+and `async lookup_name(channel, customer_id) -> Optional[str]` for channels whose webhooks carry no names.
 """
 
 from dataclasses import dataclass
@@ -13,6 +14,10 @@ from typing import Optional
 
 class ChannelError(Exception):
     """Raised by an adapter when the channel refuses or fails to deliver a message."""
+
+
+class TokenError(ChannelError):
+    """Raised when the channel's access token is expired or revoked; the channel must be reconnected."""
 
 
 class WebhookAuthError(Exception):

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Phone, Video, MoreHorizontal, PlusCircle, Image as ImageIcon, Smile, ThumbsUp, Send, Info } from 'lucide-react';
-import { useMessaging } from '../context/MessagingContext';
+import { apiService, useMessaging } from '../context/MessagingContext';
 import { Avatar } from '../components/messaging/Avatar';
+import { MetaPagesModal } from '../components/channels/MetaPagesModal';
+import { useChannelSend } from '../hooks/useChannelSend';
 
 export default function Messenger() {
-  const { getConversations, getMessages, contacts, sendMessage, receiveMessage, markAsRead } = useMessaging();
+  const { getConversations, getMessages, contacts, receiveMessage, markAsRead } = useMessaging();
   
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
@@ -14,6 +16,8 @@ export default function Messenger() {
   
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const activeContact = activeConversation ? contacts.find(c => c.id === activeConversation.contactId) : null;
+  const { sendError, send, reload, isSimulated } = useChannelSend(activeConversation);
+  const [pagesOpen, setPagesOpen] = useState(false);
 
   useEffect(() => {
     if (activeConversationId) {
@@ -22,9 +26,8 @@ export default function Messenger() {
   }, [activeConversationId, activeMessages.length, markAsRead]);
 
   const handleSend = async (content = messageText) => {
-    if (content.trim() && activeConversationId) {
-      await sendMessage(activeConversationId, content.trim(), 'text');
-      if (content === messageText) setMessageText('');
+    if (content.trim() && activeConversationId && (await send(content.trim())) && content === messageText) {
+      setMessageText('');
     }
   };
 
@@ -48,7 +51,14 @@ export default function Messenger() {
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Chats</h1>
           <div className="flex gap-3 text-gray-700">
-            <button className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"><MoreHorizontal size={20} /></button>
+            <button
+              aria-label="Facebook Page & Instagram"
+              title="Facebook Page & Instagram"
+              onClick={() => apiService && setPagesOpen(true)}
+              className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"
+            >
+              <MoreHorizontal size={20} />
+            </button>
             <button className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center"><Video size={20} /></button>
           </div>
         </div>
@@ -104,7 +114,7 @@ export default function Messenger() {
                 </div>
               </div>
               <div className="flex gap-4 text-[#0084ff]">
-                <button onClick={handleReceiveSimulated} className="text-sm border border-gray-300 text-black px-2 py-1 rounded">Simulate</button>
+                {isSimulated && <button onClick={handleReceiveSimulated} className="text-sm border border-gray-300 text-black px-2 py-1 rounded">Simulate</button>}
                 <button className="hover:bg-gray-100 p-2 rounded-full"><Phone size={20} fill="currentColor" /></button>
                 <button className="hover:bg-gray-100 p-2 rounded-full"><Video size={24} fill="currentColor" /></button>
                 <button className="hover:bg-gray-100 p-2 rounded-full"><Info size={24} /></button>
@@ -148,6 +158,10 @@ export default function Messenger() {
               })}
             </div>
 
+            {sendError && (
+              <div role="alert" className="bg-[#fff4e5] border-t border-[#ffd8a8] px-4 py-2 text-sm text-[#8a4b00]">{sendError}</div>
+            )}
+
             <div className="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
               <button className="text-[#0084ff] hover:bg-gray-100 p-2 rounded-full"><PlusCircle size={24} fill="currentColor" className="text-white bg-[#0084ff] rounded-full" /></button>
               <button className="text-[#0084ff] hover:bg-gray-100 p-2 rounded-full"><ImageIcon size={24} /></button>
@@ -181,6 +195,8 @@ export default function Messenger() {
           </div>
         )}
       </div>
+
+      {pagesOpen && <MetaPagesModal onClose={() => setPagesOpen(false)} onChanged={reload} />}
     </div>
   );
 }

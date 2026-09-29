@@ -7,10 +7,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Contact, Conversation, Message, utcnow
-from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
+from app.models.schemas import ChannelResponse, ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
 from app.providers.whatsapp import PLACEHOLDER
 from app.services.base import BaseService
-from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage, StatusUpdate
+from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage, StatusUpdate, TokenError
 from app.services.event_service import EventService
 
 PREVIEW_LENGTH = 120
@@ -202,9 +202,10 @@ class InboxService(BaseService):
             last_inbound = last_inbound.replace(tzinfo=timezone.utc)  # SQLite returns naive UTC
         if not last_inbound or datetime.now(timezone.utc) - last_inbound > window:
             hours = int(window.total_seconds() // 3600)
+            hint = " Send an approved template instead." if hasattr(adapter, "send_template") else " Wait for the customer to write again."
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"The {hours}-hour customer service window is closed. Send an approved template instead.",
+                detail=f"The {hours}-hour customer service window is closed.{hint}",
             )
 
     @classmethod
@@ -232,8 +233,13 @@ class InboxService(BaseService):
             author=author,
             created_at=utcnow(),
         )
+        token_expired = False
         try:
             message.external_id = await deliver(message)
+        except TokenError:
+            message.status = "failed"
+            token_expired = True
+            conversation.channel.status = "disconnected"  # config kept, so reconnecting reuses the channel
         except ChannelError:
             message.status = "failed"
 
@@ -241,6 +247,8 @@ class InboxService(BaseService):
         db.add(message)
         await db.commit()
         cls._publish(conversation, message)
+        if token_expired:
+            EventService.publish(conversation.workspace_id, "channel.updated", ChannelResponse.model_validate(conversation.channel))
         return message
 
     @classmethod
@@ -275,7 +283,9 @@ class InboxService(BaseService):
                 return None
 
         if not conversation:
-            contact = Contact(workspace_id=channel.workspace_id, name=inbound.name or inbound.customer_id)
+            lookup_name = getattr(ADAPTERS[channel.adapter_type], "lookup_name", None)
+            name = inbound.name or (lookup_name and await lookup_name(channel, inbound.customer_id))
+            contact = Contact(workspace_id=channel.workspace_id, name=name or inbound.customer_id)
             conversation = Conversation(
                 workspace_id=channel.workspace_id,
                 channel=channel,

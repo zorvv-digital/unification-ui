@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.db.models import Agent, Channel, Conversation, Message
-from app.models.schemas import ChannelUpdate, SimulatedInbound, WebhookInfo, WhatsAppConnect
-from app.providers.base import ChannelError, InboundMessage, StatusUpdate, WebhookAuthError  # noqa: F401 (re-exported)
+from app.models.schemas import ChannelUpdate, MetaConnect, SimulatedInbound, WebhookInfo, WhatsAppConnect
+from app.providers.base import ChannelError, InboundMessage, StatusUpdate, TokenError, WebhookAuthError  # noqa: F401 (re-exported)
+from app.providers.messenger import MessengerAdapter
 from app.providers.whatsapp import WhatsAppAdapter
 from app.services.base import BaseService
 from app.services.crypto import encrypt_secret
@@ -29,7 +30,8 @@ class SimulatedAdapter:
 
 
 # Adapter contract: see app/providers/base.py. Real channels register here.
-ADAPTERS = {"simulated": SimulatedAdapter(), "whatsapp": WhatsAppAdapter()}
+_messenger = MessengerAdapter()
+ADAPTERS = {"simulated": SimulatedAdapter(), "whatsapp": WhatsAppAdapter(), "messenger": _messenger, "instagram": _messenger}
 
 
 class ChannelService(BaseService):
@@ -106,6 +108,49 @@ class ChannelService(BaseService):
         db.add(channel)
         await db.commit()
         return channel, cls.webhook_info(channel)
+
+    @classmethod
+    async def connect_meta(cls, db: AsyncSession, workspace_id: uuid.UUID, data: MetaConnect) -> list[Channel]:
+        """
+        Verifies a Facebook Page token with Meta and connects the Page as a `messenger` channel, plus an
+        `instagram` channel when the Page has a linked Instagram professional account. Reconnecting the same
+        Page or Instagram account updates its existing channel, keeping its webhook URL and verify token.
+
+        Args:
+            db (AsyncSession): Active asynchronous database session.
+            workspace_id (uuid.UUID): Caller's workspace.
+            data (MetaConnect): Page id, Page access token, and app secret.
+
+        Returns:
+            list[Channel]: The Messenger channel, then the Instagram channel if any.
+
+        Raises:
+            HTTPException: 400 when Meta rejects the token or Page id (nothing is saved).
+        """
+        try:
+            page = await MessengerAdapter.fetch_page(data.page_id, data.page_access_token)
+        except ChannelError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Meta rejected this Page token: {exc}")
+        secrets_ = {"page_id": data.page_id, "access_token": encrypt_secret(data.page_access_token), "app_secret": encrypt_secret(data.app_secret)}
+        wanted = [("messenger", "page_id", data.page_id, page.get("name") or f"Page {data.page_id}", {})]
+        instagram = page.get("instagram_business_account")
+        if instagram:
+            wanted.append(("instagram", "ig_id", instagram["id"], f"@{instagram.get('username') or instagram['id']}", {"ig_id": instagram["id"]}))
+
+        # ponytail: matches in Python over the workspace's few channels instead of querying the JSON column.
+        existing = await cls.list_channels(db, workspace_id)
+        channels = []
+        for platform, key, account_id, name, extra in wanted:
+            channel = next((c for c in existing if c.adapter_type == platform and c.config.get(key) == account_id), None)
+            if not channel:
+                channel = Channel(workspace_id=workspace_id, platform=platform, adapter_type=platform, config={})
+                db.add(channel)
+            channel.name = name
+            channel.status = "connected"
+            channel.config = {**secrets_, **extra, "verify_token": channel.config.get("verify_token") or secrets.token_urlsafe(24)}
+            channels.append(channel)
+        await db.commit()
+        return channels
 
     @staticmethod
     def webhook_info(channel: Channel) -> WebhookInfo:

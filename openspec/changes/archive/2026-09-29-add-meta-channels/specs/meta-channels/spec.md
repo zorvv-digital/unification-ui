@@ -7,14 +7,14 @@ Connects a business's Facebook Page and Instagram professional account so Messen
 ## ADDED Requirements
 
 ### Requirement: Connect Page and Instagram account
-The system SHALL let a user connect a Facebook Page through Meta login, creating a `messenger` channel for the Page and an `instagram` channel for its linked Instagram professional account when one exists. Page tokens SHALL be stored encrypted.
+The system SHALL let a user connect a Facebook Page with its Page access token and Meta app secret, verified with Meta, creating a `messenger` channel for the Page and an `instagram` channel for its linked Instagram professional account when one exists. Page tokens and the app secret SHALL be stored encrypted. Reconnecting the same Page SHALL reuse its existing channels.
 
 #### Scenario: Page with linked Instagram
-- **WHEN** a user completes Meta login and selects a Page linked to an Instagram professional account
+- **WHEN** a user connects a Page linked to an Instagram professional account
 - **THEN** a connected `messenger` channel and a connected `instagram` channel are created
 
 #### Scenario: Page without Instagram
-- **WHEN** the selected Page has no linked Instagram professional account
+- **WHEN** the connected Page has no linked Instagram professional account
 - **THEN** only the `messenger` channel is created
 
 ### Requirement: Webhook verification and signatures

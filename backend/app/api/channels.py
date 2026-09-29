@@ -14,6 +14,7 @@ from app.models.schemas import (
     ChannelConnectedResponse,
     ChannelResponse,
     ChannelUpdate,
+    MetaConnect,
     TemplateResponse,
     WebhookInfo,
     WebhookResult,
@@ -46,6 +47,22 @@ async def connect_whatsapp(data: WhatsAppConnect, user: User = Depends(current_u
     """
     channel, webhook = await ChannelService.connect_whatsapp(db=db, workspace_id=user.workspace_id, data=data)
     return ChannelConnectedResponse(**ChannelResponse.model_validate(channel).model_dump(), **webhook.model_dump())
+
+
+@router.post("/meta", response_model=list[ChannelConnectedResponse], status_code=status.HTTP_201_CREATED)
+async def connect_meta(data: MetaConnect, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Connects a Facebook Page for Messenger, and its linked Instagram professional account for Instagram DMs,
+    with a Page access token. The token is checked with Meta first; on rejection nothing is saved (400).
+    Reconnecting the same Page (e.g. after its token expired) reuses the existing channels and webhook URLs.
+    Register each channel's `webhook_url` and `verify_token` in the Meta App Dashboard: the Messenger one under
+    Messenger webhooks (object `page`), the Instagram one under Instagram webhooks, both subscribed to `messages`.
+    """
+    channels = await ChannelService.connect_meta(db=db, workspace_id=user.workspace_id, data=data)
+    return [
+        ChannelConnectedResponse(**ChannelResponse.model_validate(c).model_dump(), **ChannelService.webhook_info(c).model_dump())
+        for c in channels
+    ]
 
 
 @router.get("/{channel_id}/webhook", response_model=WebhookInfo)
@@ -130,8 +147,8 @@ async def receive_webhook(
 ):
     """
     Public inbound endpoint for a channel (no user token). The channel's adapter checks authenticity
-    and parses the event. For `simulated` channels the body is the inbox's own format (see example); WhatsApp
-    channels need Meta's `X-Hub-Signature-256` header. Delivery statuses update our messages.
+    and parses the event. For `simulated` channels the body is the inbox's own format (see example); WhatsApp,
+    Messenger, and Instagram channels need Meta's `X-Hub-Signature-256` header. Delivery statuses update our messages.
     Conversations in `ai` mode are answered by the channel's agent right after the response.
     A disconnected channel returns 410.
     """

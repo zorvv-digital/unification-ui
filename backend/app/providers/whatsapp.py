@@ -10,7 +10,7 @@ import httpx
 from app.config.settings import settings
 from app.db.models import Channel, Conversation, Message
 from app.models.schemas import TemplateResponse
-from app.providers.base import ChannelError, InboundMessage, StatusUpdate, WebhookAuthError
+from app.providers.base import ChannelError, InboundMessage, StatusUpdate, TokenError, WebhookAuthError
 from app.services.crypto import decrypt_secret
 
 # Tests swap in httpx.MockTransport here.
@@ -26,7 +26,8 @@ async def graph(method: str, path: str, token: str, **kwargs: Any) -> dict:
     Calls Meta's Graph API.
 
     Raises:
-        ChannelError: On network failure or any Meta error response, carrying Meta's message.
+        TokenError: When Meta reports the access token as invalid, expired, or revoked (error code 190).
+        ChannelError: On network failure or any other Meta error response, carrying Meta's message.
     """
     try:
         async with httpx.AsyncClient(base_url=settings.META_GRAPH_URL, transport=_transport, timeout=20) as client:
@@ -38,7 +39,9 @@ async def graph(method: str, path: str, token: str, **kwargs: Any) -> dict:
     except ValueError:
         data = {}
     if response.is_error:
-        raise ChannelError(data.get("error", {}).get("message") or f"Meta API error {response.status_code}")
+        error = data.get("error", {})
+        message = error.get("message") or f"Meta API error {response.status_code}"
+        raise TokenError(message) if error.get("code") == 190 else ChannelError(message)
     return data
 
 
