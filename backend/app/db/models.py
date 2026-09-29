@@ -82,7 +82,7 @@ class Contact(BaseModelMixin):
 
 class Conversation(BaseModelMixin):
     """
-    One customer's thread on one channel. `external_id` is the customer's id on that channel.
+    One customer's thread on one channel. `external_id` is the customer's id on that channel (the thread id for email).
     In `ai` mode the channel's agent answers inbound messages; `needs_human` flags an escalation.
     """
     __tablename__ = "conversations"
@@ -93,6 +93,7 @@ class Conversation(BaseModelMixin):
     contact_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False)
     platform: Mapped[str] = mapped_column(String(30), nullable=False)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[Optional[str]] = mapped_column(String(998), nullable=True)  # email threads
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     unread_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

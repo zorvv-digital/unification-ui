@@ -5,6 +5,8 @@ export const mockContacts: Contact[] = [
   { id: 'c2', name: 'Sarah', username: '@sarah_designs', online: false, avatar: 'https://i.pravatar.cc/150?u=c2', phone: '+1 (555) 9876-5432', email: 'sarah@designs.com' },
   { id: 'c3', name: 'Alex', online: true, avatar: 'https://i.pravatar.cc/150?u=c3', email: 'alex@company.com' },
   { id: 'c4', name: 'Priya Singh', online: false, avatar: 'https://i.pravatar.cc/150?u=c4', phone: '+1 (555) 1111-2222' },
+  { id: 'c5', name: 'Ananya Rao', online: false, avatar: 'https://i.pravatar.cc/150?u=ananya', email: 'ananya.rao@example.com' },
+  { id: 'c6', name: 'Neha Kapoor', online: false, avatar: 'https://i.pravatar.cc/150?u=neha', email: 'neha.kapoor@example.com' },
 ];
 
 export const mockConversations: Conversation[] = [
@@ -30,6 +32,24 @@ export const mockConversations: Conversation[] = [
     contactId: 'c3',
     lastMessageAt: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
     unreadCount: 1,
+    status: 'open'
+  },
+  {
+    id: 'conv4',
+    platform: 'gmail',
+    contactId: 'c5',
+    subject: 'Bridal package for 12 December',
+    lastMessageAt: Date.now() - 1000 * 60 * 30,
+    unreadCount: 1,
+    status: 'open'
+  },
+  {
+    id: 'conv5',
+    platform: 'gmail',
+    contactId: 'c6',
+    subject: 'Invoice for September',
+    lastMessageAt: Date.now() - 1000 * 60 * 60 * 24,
+    unreadCount: 0,
     status: 'open'
   }
 ];
@@ -105,5 +125,29 @@ export const mockMessages: Message[] = [
     timestamp: Date.now() - 1000 * 60 * 60 * 24,
     direction: 'inbound',
     status: 'delivered'
+  },
+
+  // Gmail threads
+  {
+    id: 'm5',
+    conversationId: 'conv4',
+    platform: 'gmail',
+    senderId: 'c5',
+    type: 'text',
+    content: 'Hello, I\'m getting married on 12 December and would love a bridal hair and makeup trial beforehand. Could you share your bridal packages and prices?',
+    timestamp: Date.now() - 1000 * 60 * 30,
+    direction: 'inbound',
+    status: 'delivered'
+  },
+  {
+    id: 'm6',
+    conversationId: 'conv5',
+    platform: 'gmail',
+    senderId: 'c6',
+    type: 'text',
+    content: 'Could you please email me the invoice for my September facial package? I need it for reimbursement.',
+    timestamp: Date.now() - 1000 * 60 * 60 * 24,
+    direction: 'inbound',
+    status: 'read'
   }
 ];

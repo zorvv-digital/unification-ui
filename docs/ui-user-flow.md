@@ -1,8 +1,8 @@
 # UI User Flow
 
 How to run the platform locally and walk through the demo as a business user would.
-The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend with
-`META_GRAPH_URL=http://127.0.0.1:8765` for it, see §10 and §11).
+The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend pointed at the
+mock Meta and Google APIs it runs, see §13).
 
 ## 0. Run both apps
 
@@ -24,7 +24,9 @@ npm run dev
 Open **http://localhost:5173**.
 
 > Without `.env.local` (no `VITE_API_URL`), the frontend runs on its old built-in mock data and never calls the backend.
-> The Gmail items in the inbox are still frontend mock data; they move to the backend in the Gmail change.
+>
+> After pulling this change, delete `backend/unification.db*` once (conversations gained a `subject` column; the database
+> is not migrated). The demo workspace is recreated on the next start.
 
 ---
 
@@ -37,8 +39,9 @@ Open **http://localhost:5173**.
 
 ## 2. Browse the unified inbox
 
-- The list mixes WhatsApp, Instagram and Messenger conversations (and mock Gmail), newest first.
-  The small icon on each avatar shows the channel.
+- The list mixes WhatsApp, Instagram, Messenger and Gmail conversations, newest first.
+  The small icon on each avatar shows the channel. Gmail conversations are email threads and show their **subject**
+  (e.g. *Bridal package for 12 December*); replying to one works like any chat.
 - Unread counts show as black badges; the channel cards at the top summarise conversations per channel.
 - Use the **All / WhatsApp / Instagram** chips and the **Latest** sort to filter.
 
@@ -148,9 +151,6 @@ The demo's own number is listed as *Demo number (simulated)*.
 5. **Disconnect.** In **WhatsApp numbers**, click **Disconnect** next to the number and confirm. The chats stay; new messages
    are no longer received. **Reset demo data** removes connected numbers from the demo workspace.
 
-> The automated E2E (`npm run e2e`) runs this whole flow against a mock Meta API it starts on port 8765.
-> Start the backend for it with `META_GRAPH_URL=http://127.0.0.1:8765`.
-
 ## 11. Connect a Facebook Page and Instagram
 
 Open **Messenger** (click **⋯** next to *Chats*) or **Instagram** (click **...** next to the account name): the
@@ -170,7 +170,39 @@ Open **Messenger** (click **⋯** next to *Chats*) or **Instagram** (click **...
    webhook URLs, so nothing changes in Meta.
 5. **Disconnect.** Click **Disconnect** next to a channel and confirm. **Reset demo data** removes connected Pages from the demo workspace.
 
-## 12. Sign out
+## 12. Connect Gmail
+
+Click **Gmail** in the sidebar (under *Channels*): the **Gmail** window opens. The demo's mailbox is listed as
+*Demo mailbox (simulated)*. The server needs a Google OAuth client first (see `docs/api-testing-swagger.md` §13).
+
+1. **Connect.** Click **Connect with Google**. Google's sign-in page opens: choose the business Gmail account and allow
+   reading and sending email. You come back to the Inbox with the banner *"Gmail connected. New customer emails arrive in
+   the inbox within a minute or two."* If you cancel on Google's page, the banner says access was not granted and nothing
+   is connected.
+2. **Receive.** New emails in that mailbox's inbox appear within about a minute, one conversation per email thread, with the
+   sender's name and the subject. A customer's reply in the same thread lands in the same conversation, without the quoted
+   previous email.
+3. **Reply.** Answer in the Inbox as usual. The customer receives it as an email reply in the same thread (subject `Re: ...`).
+4. **Revoked access.** If access is removed in the Google account (Security → Third-party access), the channel shows
+   *Disconnected* in the Gmail window. Click **Connect with Google** again to reconnect the same address.
+5. **Disconnect.** Click **Disconnect** next to the address and confirm. **Reset demo data** removes connected Gmail accounts
+   from the demo workspace.
+
+## 13. Automated E2E
+
+`npm run e2e` runs this whole guide in a browser against mock Meta and Google APIs that it starts on port 8765.
+Start the backend for it with:
+
+```bash
+cd backend
+META_GRAPH_URL=http://127.0.0.1:8765 GMAIL_SYNC_SECONDS=2 \
+GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret \
+GOOGLE_AUTH_URL=http://127.0.0.1:8765/o/oauth2/auth GOOGLE_TOKEN_URL=http://127.0.0.1:8765/token \
+GMAIL_API_URL=http://127.0.0.1:8765/gmail/v1 \
+uv run uvicorn app.main:app --port 8000
+```
+
+## 14. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 
@@ -179,5 +211,5 @@ Click the **log-out icon** next to your name. You return to **Sign in**.
 ## Registering a real business
 
 There is no sign-up screen yet. Create a workspace with `POST /auth/register` in Swagger, then sign in with that email.
-A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10 and a Facebook Page with
-Instagram as in §11; Gmail and website chat are connected in later changes.
+A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10, a Facebook Page with
+Instagram as in §11, and Gmail as in §12; website chat is connected in a later change.

@@ -5,7 +5,8 @@ Required: `send(channel, conversation, message) -> external_id` and
 `parse_webhook(channel, headers, raw_body) -> list[InboundMessage | StatusUpdate]`.
 Optional, used when present: `verify_subscription(channel, mode, token, challenge) -> str`,
 `session_window: timedelta`, `list_templates(channel)`, `send_template(channel, conversation, template, parameters)`,
-and `async lookup_name(channel, customer_id) -> Optional[str]` for channels whose webhooks carry no names.
+`async lookup_name(channel, customer_id) -> Optional[str]` for channels whose webhooks carry no names, and
+`async fetch_new(channel) -> list[InboundMessage]` for polled channels (Gmail).
 """
 
 from dataclasses import dataclass
@@ -31,6 +32,9 @@ class InboundMessage:
     type: str = "text"
     name: Optional[str] = None
     message_id: Optional[str] = None
+    thread_id: Optional[str] = None  # conversation key when a channel threads (email); defaults to customer_id
+    subject: Optional[str] = None
+    email: Optional[str] = None  # identifies the contact across conversations
 
 
 @dataclass

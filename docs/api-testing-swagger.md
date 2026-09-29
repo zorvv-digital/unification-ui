@@ -69,7 +69,7 @@ Re-authorize with the demo token before continuing.
 ## 3. Channels
 
 `GET /api/v1/channels` → Execute.
-Expect three channels, `whatsapp`, `instagram`, `messenger`, all `adapter_type: "simulated"`, `status: "connected"`, and **no `config` field**.
+Expect four channels, `whatsapp`, `instagram`, `messenger`, `gmail`, all `adapter_type: "simulated"`, `status: "connected"`, and **no `config` field**.
 WhatsApp has `ai_enabled: true` with the demo agent as `ai_agent_id`; the others have `ai_enabled: false` (see §10).
 **Copy the `id` of the WhatsApp channel** (CHANNEL_ID).
 
@@ -79,7 +79,8 @@ WhatsApp has `ai_enabled: true` with the demo agent as `ai_agent_id`; the others
 
 ### 4.1 List conversations
 `GET /api/v1/conversations` → Execute (no parameters).
-Expect 6 conversations, newest `last_message_at` first, each with `contact`, `unread_count`, `last_message_preview`. Timestamps end with `+00:00`.
+Expect 9 conversations, newest `last_message_at` first, each with `contact`, `unread_count`, `last_message_preview`. Timestamps end with `+00:00`.
+The three `gmail` ones are email threads and also have a `subject` (other channels have `subject: null`).
 **Copy the first conversation's `id`** (CONV_ID) and its `contact.id` (CONTACT_ID).
 
 ### 4.2 Filters
@@ -187,7 +188,7 @@ A real business's messages never get simulated replies; it has no channels until
 
 Authorize with the demo token again.
 `POST /api/v1/demo/reset` → `204`.
-`GET /conversations`: back to the 6 seeded conversations; Meera and all messages you sent are gone, and unread counts are restored.
+`GET /conversations`: back to the 9 seeded conversations; Meera and all messages you sent are gone, and unread counts are restored.
 
 ---
 
@@ -424,3 +425,49 @@ Revoke the app's access (Facebook → Settings → Business integrations) or let
 `channel.updated` event is sent. Further replies get `409` and inbound events `410`. Repeat **Connect** (§12.1) with a
 fresh token: the same channels come back as `connected` with unchanged webhook URLs. The same applies to WhatsApp numbers
 whose token expires. `DELETE /channels/{id}` disconnects deliberately, as in §11.5.
+
+## 13. Gmail
+
+Connect a Gmail account with Google sign-in. One-time setup in **Google Cloud Console**:
+1. Create a project, enable the **Gmail API**.
+2. **OAuth consent screen**: External, add the scopes `gmail.readonly` and `gmail.send`, and add your Gmail address as a
+   **test user** (these are restricted scopes; public use needs Google verification).
+3. **Credentials → Create OAuth client ID → Web application**, with the authorized redirect URI
+   `http://localhost:8000/api/v1/channels/gmail/callback` (or `{PUBLIC_BASE_URL}/api/v1/channels/gmail/callback`).
+4. Put the client id and secret in `backend/.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and restart.
+   `FRONTEND_URL` (default `http://localhost:5173`) is where the browser returns afterwards.
+
+Unlike Meta, Google does not call your server: the backend polls Gmail every `GMAIL_SYNC_SECONDS` (default 60), so no
+public URL is needed. Without a Google account, use the automated tests (`tests/test_gmail.py`) or the E2E mock
+(`docs/ui-user-flow.md` §13).
+
+### 13.1 Connect
+| Step | Do | Expect |
+|---|---|---|
+| Sign-in URL | `POST /channels/gmail/authorize` | `200` with `authorize_url` (Google, with `access_type=offline` and a signed `state`) |
+| Not configured | same without `GOOGLE_CLIENT_ID` | `400` "Gmail is not configured on this server" |
+| Sign in | open `authorize_url` in the browser (same session as the app), choose the account, **Allow** | the browser lands on `http://localhost:5173/inbox?gmail=connected` |
+| Check | `GET /channels` | a `gmail` channel named after the address, `adapter_type: "gmail"`, `status: "connected"`; no tokens in the response |
+| Cancel | open a new `authorize_url`, click **Cancel** on Google's page | lands on `...?gmail=denied`; no new channel |
+| Reconnect | sign in again with the same account | the same channel id, `connected` |
+
+The callback (`GET /channels/gmail/callback`) is called by Google, not from Swagger; with a missing, forged or expired
+`state` it redirects to `...?gmail=error`.
+
+### 13.2 Receive
+Send an email to the connected address from another account, e.g. subject *Booking for Saturday*. Within a minute
+(or right away with `POST /channels/{GMAIL_ID}/sync` → `{"received": 1}`), `GET /conversations` shows a `gmail`
+conversation with `subject: "Booking for Saturday"`, `external_id` = the Gmail thread id, and the sender's name and
+`email` on the contact. Reply to that email from the customer account: the message joins the same conversation, without
+the quoted previous email. A second thread from the same sender is a new conversation with the same contact.
+`POST /channels/{id}/sync` on a non-Gmail channel returns `400`.
+
+### 13.3 Reply
+`POST /conversations/{id}/messages` with `{"content": "Your table is booked!"}` → `201`, `status: "sent"`, `external_id`
+= the Gmail message id. The customer receives it as a reply in the same thread (subject `Re: Booking for Saturday`).
+There is no 24-hour window for email.
+
+### 13.4 Revoked access
+Remove the app in the Google account (**Security → Third-party apps with account access**). The next sync
+(or `POST /channels/{GMAIL_ID}/sync`) sets the channel to `status: "disconnected"` and emits `channel.updated`; a reply
+is stored as `failed` and also disconnects it. Sign in again (§13.1) to reconnect the same channel.

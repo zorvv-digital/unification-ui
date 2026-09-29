@@ -21,7 +21,7 @@ from app.services.inbox_service import InboxService
 logger = logging.getLogger("demo")
 
 SEED_PATH = Path(__file__).parent.parent / "demo" / "seed.json"
-DEMO_PLATFORMS = ("whatsapp", "instagram", "messenger")
+DEMO_PLATFORMS = ("whatsapp", "instagram", "messenger", "gmail")
 
 
 def _load_seed() -> dict:
@@ -59,9 +59,6 @@ class DemoService(BaseService):
             password_hash=AuthService.hash_password(settings.DEMO_PASSWORD),
         )
         db.add_all([workspace, user])
-        await db.flush()
-        for platform in DEMO_PLATFORMS:
-            db.add(Channel(workspace_id=workspace.id, platform=platform, name=f"Demo {platform.title()}", adapter_type="simulated"))
         await db.flush()
         await cls._seed_conversations(db, workspace.id, seed)
         await cls._seed_ai(db, workspace.id, seed)
@@ -140,8 +137,15 @@ class DemoService(BaseService):
 
     @classmethod
     async def _seed_conversations(cls, db: AsyncSession, workspace_id: uuid.UUID, seed: dict) -> None:
-        channels = await db.execute(select(Channel).where(Channel.workspace_id == workspace_id))
+        channels = await db.execute(select(Channel).where(Channel.workspace_id == workspace_id, Channel.adapter_type == "simulated"))
         channel_by_platform = {channel.platform: channel for channel in channels.scalars().all()}
+        for platform in DEMO_PLATFORMS:  # also adds channels introduced after an older demo workspace was created
+            if platform not in channel_by_platform:
+                channel_by_platform[platform] = Channel(
+                    workspace_id=workspace_id, platform=platform, name=f"Demo {platform.title()}", adapter_type="simulated"
+                )
+                db.add(channel_by_platform[platform])
+        await db.flush()
         now = datetime.now(timezone.utc)
 
         for item in seed["conversations"]:
@@ -153,6 +157,7 @@ class DemoService(BaseService):
                 contact=contact,
                 platform=channel.platform,
                 external_id=item["customer_id"],
+                subject=item.get("subject"),
                 status=item.get("status", "open"),
                 mode=item.get("mode", "human"),
             )

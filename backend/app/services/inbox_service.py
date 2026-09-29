@@ -7,10 +7,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Contact, Conversation, Message, utcnow
-from app.models.schemas import ChannelResponse, ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
+from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
 from app.providers.whatsapp import PLACEHOLDER
 from app.services.base import BaseService
-from app.services.channel_service import ADAPTERS, ChannelError, InboundMessage, StatusUpdate, TokenError
+from app.services.channel_service import ADAPTERS, ChannelError, ChannelService, InboundMessage, StatusUpdate, TokenError
 from app.services.event_service import EventService
 
 PREVIEW_LENGTH = 120
@@ -233,13 +233,11 @@ class InboxService(BaseService):
             author=author,
             created_at=utcnow(),
         )
-        token_expired = False
         try:
             message.external_id = await deliver(message)
         except TokenError:
             message.status = "failed"
-            token_expired = True
-            conversation.channel.status = "disconnected"  # config kept, so reconnecting reuses the channel
+            ChannelService.mark_disconnected(conversation.channel)
         except ChannelError:
             message.status = "failed"
 
@@ -247,8 +245,6 @@ class InboxService(BaseService):
         db.add(message)
         await db.commit()
         cls._publish(conversation, message)
-        if token_expired:
-            EventService.publish(conversation.workspace_id, "channel.updated", ChannelResponse.model_validate(conversation.channel))
         return message
 
     @classmethod
@@ -268,7 +264,7 @@ class InboxService(BaseService):
         """
         result = await db.execute(
             select(Conversation).where(
-                Conversation.channel_id == channel.id, Conversation.external_id == inbound.customer_id
+                Conversation.channel_id == channel.id, Conversation.external_id == (inbound.thread_id or inbound.customer_id)
             )
         )
         conversation = result.scalars().first()
@@ -283,15 +279,23 @@ class InboxService(BaseService):
                 return None
 
         if not conversation:
-            lookup_name = getattr(ADAPTERS[channel.adapter_type], "lookup_name", None)
-            name = inbound.name or (lookup_name and await lookup_name(channel, inbound.customer_id))
-            contact = Contact(workspace_id=channel.workspace_id, name=name or inbound.customer_id)
+            contact = None
+            if inbound.email:  # one contact per email address across threads
+                result = await db.execute(
+                    select(Contact).where(Contact.workspace_id == channel.workspace_id, Contact.email == inbound.email)
+                )
+                contact = result.scalars().first()
+            if not contact:
+                lookup_name = getattr(ADAPTERS[channel.adapter_type], "lookup_name", None)
+                name = inbound.name or (lookup_name and await lookup_name(channel, inbound.customer_id))
+                contact = Contact(workspace_id=channel.workspace_id, name=name or inbound.customer_id, email=inbound.email)
             conversation = Conversation(
                 workspace_id=channel.workspace_id,
                 channel=channel,
                 contact=contact,
                 platform=channel.platform,
-                external_id=inbound.customer_id,
+                external_id=inbound.thread_id or inbound.customer_id,
+                subject=inbound.subject,
                 mode="ai" if channel.ai_enabled and channel.ai_agent_id else "human",
             )
             db.add_all([contact, conversation])

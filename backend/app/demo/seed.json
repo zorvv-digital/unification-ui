@@ -159,6 +159,66 @@
           "status": "read"
         }
       ]
+    },
+    {
+      "platform": "gmail",
+      "customer_id": "demo-thread-1",
+      "subject": "Bridal package for 12 December",
+      "contact": {
+        "name": "Ananya Rao",
+        "avatar": "https://i.pravatar.cc/150?u=ananya",
+        "email": "ananya.rao@example.com"
+      },
+      "messages": [
+        {
+          "direction": "inbound",
+          "content": "Hello, I'm getting married on 12 December and would love a bridal hair and makeup trial beforehand. Could you share your bridal packages and prices?",
+          "minutes_ago": 30,
+          "status": "delivered"
+        }
+      ]
+    },
+    {
+      "platform": "gmail",
+      "customer_id": "demo-thread-2",
+      "subject": "Corporate wellness day",
+      "contact": {
+        "name": "Vikram Shah",
+        "avatar": "https://i.pravatar.cc/150?u=vikram",
+        "email": "vikram@brightlabs.example.com"
+      },
+      "messages": [
+        {
+          "direction": "inbound",
+          "content": "Hi team, we'd like to book express massages for 20 employees at our office next month. Do you offer on-site sessions?",
+          "minutes_ago": 180,
+          "status": "read"
+        },
+        {
+          "direction": "outbound",
+          "content": "Hi Vikram, yes we do! On-site chair massages are 900 INR per person. Which dates suit you?",
+          "minutes_ago": 150,
+          "status": "read"
+        }
+      ]
+    },
+    {
+      "platform": "gmail",
+      "customer_id": "demo-thread-3",
+      "subject": "Invoice for September",
+      "contact": {
+        "name": "Neha Kapoor",
+        "avatar": "https://i.pravatar.cc/150?u=neha",
+        "email": "neha.kapoor@example.com"
+      },
+      "messages": [
+        {
+          "direction": "inbound",
+          "content": "Could you please email me the invoice for my September facial package? I need it for reimbursement.",
+          "minutes_ago": 1440,
+          "status": "read"
+        }
+      ]
     }
   ],
   "knowledge": [

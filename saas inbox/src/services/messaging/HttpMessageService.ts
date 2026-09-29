@@ -23,6 +23,7 @@ export interface ApiConversation {
   platform: Platform;
   channel_id: string;
   external_id: string;
+  subject?: string | null;
   status: 'open' | 'closed';
   unread_count: number;
   last_message_at: string | null;
@@ -68,6 +69,7 @@ export const toConversation = (c: ApiConversation): Conversation => ({
   contactId: c.contact.id,
   channelId: c.channel_id,
   externalId: c.external_id,
+  subject: c.subject ?? undefined,
   lastMessageAt: c.last_message_at ? Date.parse(c.last_message_at) : 0,
   unreadCount: c.unread_count,
   status: c.status,

@@ -49,6 +49,7 @@ export const channelApi = {
     api().request<Channel & WebhookInfo>('/channels/whatsapp', { method: 'POST', body: JSON.stringify(credentials) }),
   connectMeta: (credentials: MetaCredentials) =>
     api().request<(Channel & WebhookInfo)[]>('/channels/meta', { method: 'POST', body: JSON.stringify(credentials) }),
+  authorizeGmail: () => api().request<{ authorize_url: string }>('/channels/gmail/authorize', { method: 'POST' }),
   webhookInfo: (id: string) => api().request<WebhookInfo>(`/channels/${id}/webhook`),
   disconnect: (id: string) => api().request<void>(`/channels/${id}`, { method: 'DELETE' }),
   listTemplates: (id: string) => api().request<Template[]>(`/channels/${id}/templates`),

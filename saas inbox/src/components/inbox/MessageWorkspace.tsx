@@ -133,7 +133,7 @@ export const MessageWorkspace: React.FC<MessageWorkspaceProps> = ({
               )}
             </div>
             <div className="text-[11px] text-[var(--color-brand-text-secondary)]">
-              {apiService && isAiEnabled ? 'AI is replying' : contact.online ? 'Active now' : 'Last seen recently'}
+              {conversation.subject ?? (apiService && isAiEnabled ? 'AI is replying' : contact.online ? 'Active now' : 'Last seen recently')}
             </div>
           </div>
         </div>

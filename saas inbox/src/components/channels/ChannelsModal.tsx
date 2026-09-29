@@ -21,13 +21,16 @@ interface Props {
   registerHint: (channel: Channel) => string;
   /** Tailwind classes for the accent: [focus ring + border, button]. */
   accent: [string, string];
+  /** Submit button text; with no `fields` the form is just this button. */
+  connectLabel?: string;
+  busyLabel?: string;
   onClose: () => void;
   onChanged: () => void;
 }
 
 const PLATFORM_LABELS: Record<string, string> = { whatsapp: 'WhatsApp', messenger: 'Messenger', instagram: 'Instagram' };
 
-export function ChannelsModal({ title, icon, platforms, simulatedLabel, formTitle, formHelp, fields, connect, registerHint, accent, onClose, onChanged }: Props) {
+export function ChannelsModal({ title, icon, platforms, simulatedLabel, formTitle, formHelp, fields, connect, registerHint, accent, connectLabel = 'Connect', busyLabel = 'Checking with Meta…', onClose, onChanged }: Props) {
   const empty = Object.fromEntries(fields.map(f => [f.key, '']));
   const [channels, setChannels] = useState<Channel[]>([]);
   const [form, setForm] = useState<Record<string, string>>(empty);
@@ -130,7 +133,7 @@ export function ChannelsModal({ title, icon, platforms, simulatedLabel, formTitl
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end">
               <button type="submit" disabled={busy} className={`px-5 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-60 ${accent[1]}`}>
-                {busy ? 'Checking with Meta…' : 'Connect'}
+                {busy ? busyLabel : connectLabel}
               </button>
             </div>
           </form>

@@ -3,7 +3,7 @@ import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,9 @@ from app.models.schemas import (
     ChannelConnectedResponse,
     ChannelResponse,
     ChannelUpdate,
+    GmailAuthorize,
     MetaConnect,
+    SyncResult,
     TemplateResponse,
     WebhookInfo,
     WebhookResult,
@@ -22,7 +24,9 @@ from app.models.schemas import (
 )
 from app.services.ai_reply_service import AiReplyService
 from app.services.channel_service import ADAPTERS, ChannelError, ChannelService, StatusUpdate, WebhookAuthError
+from app.config.settings import settings
 from app.services.inbox_service import InboxService
+from app.services.sync_service import SyncService
 
 router = APIRouter(prefix="/channels", tags=["Channels"])
 webhook_router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -63,6 +67,54 @@ async def connect_meta(data: MetaConnect, user: User = Depends(current_user), db
         ChannelConnectedResponse(**ChannelResponse.model_validate(c).model_dump(), **ChannelService.webhook_info(c).model_dump())
         for c in channels
     ]
+
+
+@router.post("/gmail/authorize", response_model=GmailAuthorize)
+async def authorize_gmail(user: User = Depends(current_user)):
+    """
+    Starts connecting Gmail: returns the Google sign-in URL to open in the browser. After consent Google redirects to
+    `/channels/gmail/callback`, which connects the account and sends the browser back to the app. 400 when the server
+    has no Google OAuth client configured.
+    """
+    return GmailAuthorize(authorize_url=ChannelService.gmail_authorize_url(user.workspace_id))
+
+
+@router.get("/gmail/callback", include_in_schema=False)
+async def gmail_callback(
+    state: str = "",
+    code: Optional[str] = None,
+    error: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Google's redirect after sign-in. Redirects to `{FRONTEND_URL}/inbox?gmail=connected|denied|error`."""
+    result = "denied"
+    if not error and code:
+        try:
+            await ChannelService.complete_gmail_oauth(db=db, code=code, state=state)
+            result = "connected"
+        except ChannelError:
+            result = "error"
+    return RedirectResponse(f"{settings.FRONTEND_URL}/inbox?gmail={result}", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/{channel_id}/sync", response_model=SyncResult)
+async def sync_channel(
+    channel_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Imports new messages for a polled channel (Gmail) now, instead of waiting for the background sync
+    (every `GMAIL_SYNC_SECONDS`). A revoked Google grant marks the channel `disconnected`. 400 for other channels.
+    """
+    channel = await ChannelService.get_workspace_channel(db=db, workspace_id=user.workspace_id, channel_id=channel_id)
+    if not hasattr(ADAPTERS[channel.adapter_type], "fetch_new"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This channel receives messages by webhook")
+    conversation_ids = await SyncService.sync_channel(db=db, channel=channel)
+    for conversation_id in conversation_ids:
+        background_tasks.add_task(AiReplyService.answer, conversation_id)
+    return SyncResult(received=len(conversation_ids))
 
 
 @router.get("/{channel_id}/webhook", response_model=WebhookInfo)

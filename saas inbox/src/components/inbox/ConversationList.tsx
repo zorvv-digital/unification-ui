@@ -90,6 +90,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                       {new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
+                  {conv.subject && (
+                    <p className="text-[13px] font-medium text-[var(--color-brand-text)] truncate">{conv.subject}</p>
+                  )}
                   <div className="flex justify-between items-center">
                     <p className={`text-[13px] truncate ${conv.unreadCount > 0 ? 'text-[var(--color-brand-text)] font-medium' : 'text-gray-500'}`}>
                       {lastMsg?.author === 'agent' ? 'AI: ' : lastMsg?.direction === 'outbound' ? 'You: ' : ''}{lastMsg?.content || 'Attachment'}

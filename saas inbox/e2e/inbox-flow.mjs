@@ -1,6 +1,10 @@
 // End-to-end check of docs/ui-user-flow.md against a running backend and saas inbox.
-// Run: npm run e2e   (`npm run dev` on :5173; backend on :8000 with DEMO_MODE=true and
-//      META_GRAPH_URL=http://127.0.0.1:8765, the mock Meta Graph API this script starts)
+// Run: npm run e2e   (`npm run dev` on :5173; backend on :8000 with DEMO_MODE=true and the mock Meta + Google
+//      APIs this script starts on :8765:
+//        META_GRAPH_URL=http://127.0.0.1:8765 GMAIL_SYNC_SECONDS=2
+//        GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret
+//        GOOGLE_AUTH_URL=http://127.0.0.1:8765/o/oauth2/auth GOOGLE_TOKEN_URL=http://127.0.0.1:8765/token
+//        GMAIL_API_URL=http://127.0.0.1:8765/gmail/v1)
 // Uses an installed browser via BROWSER_CHANNEL (default msedge; chrome also works).
 import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
@@ -25,12 +29,53 @@ const WA = { phoneId: '109876543210', wabaId: '208765432109', token: 'e2e-good-t
 const META = { pageId: '112233445566', igId: '17841400000000001', token: 'e2e-page-token', secret: 'e2e-meta-secret', igsid: '8000000000000001' };
 const graphSends = [];
 let metaRevoked = false;
+
+// --- Mock Google (OAuth + Gmail API) ---
+const GMAIL = { address: 'hello@glowsalon.example.com', inbox: [], sent: [], tokens: new Set(), revoked: false };
+const b64url = text => Buffer.from(text).toString('base64url');
+const gmailMessage = (id, threadId, subject, body, from) => ({
+  id, threadId, payload: { mimeType: 'text/plain', body: { data: b64url(body) }, headers: [
+    { name: 'From', value: from }, { name: 'Subject', value: subject }, { name: 'Message-ID', value: `<${id}@mail.example.com>` },
+  ] },
+});
+const google = (req, res, url, body, reply) => {
+  const path = url.pathname;
+  if (path === '/o/oauth2/auth') {
+    const back = new URL(url.searchParams.get('redirect_uri'));
+    back.search = new URLSearchParams({ code: 'e2e-code', state: url.searchParams.get('state') }).toString();
+    res.writeHead(302, { Location: back.toString() });
+    return res.end();
+  }
+  if (path === '/token') {
+    const form = new URLSearchParams(body);
+    if (form.get('grant_type') === 'authorization_code' && form.get('code') !== 'e2e-code') return reply(400, { error: 'invalid_grant' });
+    if (form.get('grant_type') === 'refresh_token' && GMAIL.revoked) return reply(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
+    const token = `ya29.e2e${GMAIL.tokens.size + 1}`;
+    GMAIL.tokens.add(token);
+    return reply(200, { access_token: token, refresh_token: 'e2e-refresh', expires_in: 3599 });
+  }
+  if (GMAIL.revoked || !GMAIL.tokens.has((req.headers.authorization ?? '').replace('Bearer ', ''))) {
+    return reply(401, { error: { code: 401, message: 'Invalid Credentials' } });
+  }
+  const rest = path.replace('/gmail/v1/users/me/', '');
+  if (rest === 'profile') return reply(200, { emailAddress: GMAIL.address, historyId: '1' });
+  if (rest === 'messages' && req.method === 'GET') return reply(200, { messages: GMAIL.inbox.map(m => ({ id: m.id, threadId: m.threadId })) });
+  if (rest === 'messages/send') {
+    GMAIL.sent.push(JSON.parse(body));
+    return reply(200, { id: `gsent${GMAIL.sent.length}`, threadId: JSON.parse(body).threadId });
+  }
+  if (rest.startsWith('messages/')) return reply(200, GMAIL.inbox.find(m => m.id === rest.split('/')[1]));
+  if (rest.startsWith('threads/')) return reply(200, { messages: GMAIL.inbox.filter(m => m.threadId === rest.split('/')[1]) });
+  return reply(404, { error: { message: 'Unknown path' } });
+};
 const graph = http.createServer((req, res) => {
   let body = '';
   req.on('data', chunk => (body += chunk));
   req.on('end', () => {
     const reply = (code, data) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
-    const path = new URL(req.url, 'http://graph').pathname;
+    const url = new URL(req.url, 'http://graph');
+    const path = url.pathname;
+    if (path.startsWith('/o/oauth2/') || path === '/token' || path.startsWith('/gmail/')) return google(req, res, url, body, reply);
     if (req.headers.authorization === `Bearer ${META.token}`) {
       if (metaRevoked) return reply(400, { error: { message: 'Error validating access token: The session has been invalidated', type: 'OAuthException', code: 190 } });
       if (req.method === 'GET' && path === `/${META.pageId}`) return reply(200, { id: META.pageId, name: 'Glow Salon Page', instagram_business_account: { id: META.igId, username: 'glowsalon' } });
@@ -211,6 +256,7 @@ await step('A7. the header switch turns auto-reply off and back on per channel',
   await page.getByLabel('Answering agent').filter({ hasText: 'Glow Assistant' }).waitFor();
   await page.getByLabel('Demo Instagram').uncheck();
   await page.getByLabel('Demo Messenger').uncheck();
+  await page.getByLabel('Demo Gmail').uncheck();
   await page.screenshot({ path: SHOTS + 'A7-auto-reply.png' });
   await page.getByText('Enable Automation').click();
   await waitPressed('AI auto-reply', 'true');
@@ -329,9 +375,10 @@ await step('M2. a valid Page token connects Messenger and the linked Instagram a
   await page.getByLabel('Close').click();
 });
 
-await step('M3. a signed Instagram DM appears live with the customer name from Meta', async () => {
-  await page.goto(`${UI}/instagram`);
+await step('M3. a signed Instagram DM appears with the customer name from Meta', async () => {
+  // Posted before opening the page: live delivery is covered by W4/G3, and posting during page load races the event stream.
   assert.equal((await instagramDm(igChannel.id, 'm_in_e2e_1', 'Do you have a slot tomorrow?')).status, 200);
+  await page.goto(`${UI}/instagram`);
   await page.getByText('Arjun Mehta').first().click();
   await page.getByText('Do you have a slot tomorrow?').last().waitFor();
   assert.equal(await page.getByText('Simulate', { exact: true }).count(), 0);
@@ -367,6 +414,58 @@ await step('M6. reconnecting the Page reuses the channel and sending works again
   await page.getByText('Sorry, we are back!').last().waitFor();
   assert.equal(graphSends.at(-1).message.text, 'Sorry, we are back!');
   assert.equal(await page.getByRole('alert').count(), 0);
+});
+
+// --- Gmail (add-gmail-channel) ---
+const sidebarGmail = () => page.locator('aside').getByRole('button', { name: 'Gmail' });
+
+await step('G1. the demo inbox has Gmail threads with subjects', async () => {
+  await page.goto(`${UI}/inbox`);
+  await page.getByRole('button', { name: 'Gmail', exact: true }).last().click();
+  await page.getByText('Bridal package for 12 December').first().click();
+  await page.getByText('bridal hair and makeup trial').last().waitFor();
+  await page.screenshot({ path: SHOTS + 'G1-demo-gmail.png' });
+});
+
+await step('G2. connecting Gmail goes through Google sign-in and back', async () => {
+  await sidebarGmail().click();
+  await page.getByText('Demo mailbox (simulated)').waitFor();
+  await page.getByRole('button', { name: 'Connect with Google' }).click();
+  await page.getByRole('status').getByText('Gmail connected').waitFor();
+  assert.equal(new URL(page.url()).search, ''); // the ?gmail= result is cleared from the address bar
+  const gmail = (await api('/channels', {}, token)).find(c => c.adapter_type === 'gmail');
+  assert.deepEqual([gmail.name, gmail.status], [GMAIL.address, 'connected']);
+  await page.screenshot({ path: SHOTS + 'G2-gmail-connected.png' });
+});
+
+await step('G3. a new customer email is synced into the inbox with its subject', async () => {
+  GMAIL.inbox.push(gmailMessage('gm1', 'e2e-t1', 'Table for six on Friday', 'Hi! Could we book a table for six this Friday at 8pm?', 'Kavya Iyer <kavya@example.com>'));
+  await page.getByText('Table for six on Friday').first().waitFor({ timeout: 10000 });
+  await page.getByText('Kavya Iyer').first().click();
+  await page.getByText('Could we book a table for six').last().waitFor();
+});
+
+await step('G4. a reply is emailed in the same thread', async () => {
+  await page.fill('textarea[placeholder="Type a message..."]', 'Friday 8pm is booked for six!');
+  await page.keyboard.press('Enter');
+  await page.getByText('Friday 8pm is booked for six!').last().waitFor();
+  const sent = GMAIL.sent.at(-1);
+  assert.equal(sent.threadId, 'e2e-t1');
+  const mime = Buffer.from(sent.raw, 'base64url').toString();
+  assert.match(mime, /To: kavya@example.com/);
+  assert.match(mime, /Subject: Re: Table for six on Friday/);
+  assert.match(mime, /In-Reply-To: <gm1@mail.example.com>/);
+  await page.screenshot({ path: SHOTS + 'G4-gmail-reply.png' });
+});
+
+await step('G5. revoking Google access disconnects the channel', async () => {
+  GMAIL.revoked = true;
+  const disconnected = async () => (await api('/channels', {}, token)).find(c => c.adapter_type === 'gmail').status === 'disconnected';
+  for (let i = 0; i < 20 && !(await disconnected()); i++) await page.waitForTimeout(500);
+  assert.ok(await disconnected());
+  await sidebarGmail().click();
+  await page.getByText('Disconnected', { exact: true }).waitFor();
+  await page.getByLabel('Close').click();
 });
 
 // --- AI playground (add-ai-agents) ---
@@ -443,7 +542,7 @@ await step('9. reset demo restores the seed', async () => {
   await page.waitForFunction(() => !document.body.innerText.includes('Meera'), null, { timeout: 5000 });
   await page.getByText('Rahul Kumar').first().waitFor();
   const conversations = await api('/conversations', {}, token);
-  assert.equal(conversations.length, 6);
+  assert.equal(conversations.length, 9);
   const agents = await api('/agents', {}, token);
   assert.equal(agents.length, 1);
   assert.equal(agents[0].active_version_number, 1);

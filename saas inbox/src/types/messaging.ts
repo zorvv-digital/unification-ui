@@ -19,6 +19,7 @@ export interface Conversation {
   contactId: string;
   channelId?: string;
   externalId?: string;
+  subject?: string;
   lastMessageId?: string;
   lastMessageAt: number;
   unreadCount: number;

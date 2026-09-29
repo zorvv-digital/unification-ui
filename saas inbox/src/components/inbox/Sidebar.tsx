@@ -6,6 +6,7 @@ import {
 import { apiService } from '../../context/MessagingContext';
 import { clearToken, type ApiUser } from '../../services/messaging/HttpMessageService';
 import { Avatar } from '../messaging/Avatar';
+import { GmailModal } from '../channels/GmailModal';
 import { InstagramIcon } from '../icons/InstagramIcon';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Bot } from 'lucide-react';
@@ -20,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = useState<ApiUser | null>(null);
+  const [gmailOpen, setGmailOpen] = useState(false);
 
   useEffect(() => {
     apiService?.me().then(setUser).catch(() => setUser(null));
@@ -85,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
               <SidebarItem icon={<FaWhatsapp size={18} className="text-[#25D366]" />} label="WhatsApp" badge="3" />
               <SidebarItem icon={<InstagramIcon size={18} className="text-[#E1306C]" />} label="Instagram" />
               <SidebarItem icon={<MessageSquare size={18} className="text-[#0084FF]" />} label="Messenger" badge="1" />
-              <SidebarItem icon={<Mail size={18} className="text-red-500" />} label="Gmail" />
+              <SidebarItem icon={<Mail size={18} className="text-red-500" />} label="Gmail" onClick={() => apiService && setGmailOpen(true)} />
             </nav>
           </div>
 
@@ -129,6 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           )}
         </div>
       </aside>
+      {gmailOpen && <GmailModal onClose={() => setGmailOpen(false)} onChanged={() => {}} />}
     </>
   );
 };

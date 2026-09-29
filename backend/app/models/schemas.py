@@ -93,6 +93,15 @@ class MetaConnect(BaseModel):
     app_secret: str = Field(min_length=1)
 
 
+class GmailAuthorize(BaseModel):
+    """Google sign-in URL; open it in the browser to connect a Gmail account."""
+    authorize_url: str
+
+
+class SyncResult(BaseModel):
+    received: int
+
+
 class WebhookInfo(BaseModel):
     """Values to paste into Meta's webhook configuration."""
     webhook_url: str
@@ -166,6 +175,7 @@ class ConversationResponse(BaseModel):
     platform: str
     channel_id: uuid.UUID
     external_id: str
+    subject: Optional[str] = None
     status: str
     unread_count: int
     last_message_at: Optional[UtcDatetime] = None
