@@ -60,7 +60,7 @@ def test_reset_restores_seed(client, demo_headers, register):
     assert client.post(f"{API}/demo/reset", headers=demo_headers).status_code == 204
     after = client.get(f"{API}/conversations", headers=demo_headers).json()
     assert not any(c["external_id"] == "extra-customer" for c in after)
-    assert len(after) == 9
+    assert len(after) == 10
 
     assert client.post(f"{API}/demo/reset", headers=register()).status_code == 403
 

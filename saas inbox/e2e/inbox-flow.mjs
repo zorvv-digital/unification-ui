@@ -257,6 +257,7 @@ await step('A7. the header switch turns auto-reply off and back on per channel',
   await page.getByLabel('Demo Instagram').uncheck();
   await page.getByLabel('Demo Messenger').uncheck();
   await page.getByLabel('Demo Gmail').uncheck();
+  await page.getByLabel('Website chat', { exact: true }).uncheck();
   await page.screenshot({ path: SHOTS + 'A7-auto-reply.png' });
   await page.getByText('Enable Automation').click();
   await waitPressed('AI auto-reply', 'true');
@@ -468,6 +469,69 @@ await step('G5. revoking Google access disconnects the channel', async () => {
   await page.getByLabel('Close').click();
 });
 
+// --- Website chat (add-website-chat) ---
+const DEMO_SITE = API + '/widget/demo';
+let site;
+const SEEDED_VISITOR = '5f1c0a3e9b7d4c2a8e6f1b0d3c5a7e9f';
+const visitorConversation = async () => (await api('/conversations', {}, token)).find(c => c.platform === 'website' && c.external_id !== SEEDED_VISITOR);
+
+await step('WC1. the Website chat window shows the embed code and saves settings', async () => {
+  await page.goto(`${UI}/inbox`);
+  await page.locator('aside').getByRole('button', { name: 'Website chat' }).click();
+  assert.match(await page.getByLabel('Embed code').inputValue(), /data-widget-key="[^"]+"/);
+  await page.getByLabel('Greeting').fill('Hi! Ask us anything about Glow Salon.');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('status').getByText('Saved.').waitFor();
+  await page.screenshot({ path: SHOTS + 'WC1-website-settings.png' });
+  await page.getByLabel('Close').click();
+});
+
+await step('WC2. a visitor chats on the demo page and it appears in the inbox live', async () => {
+  site = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  site.on('pageerror', e => errors.push(e.message));
+  await site.goto(DEMO_SITE);
+  await site.getByLabel('Open chat').click();
+  await site.getByText('Hi! Ask us anything about Glow Salon.').waitFor();
+  await site.getByLabel('Chat message').fill('Hi, are you open today?');
+  await site.keyboard.press('Enter');
+  await site.locator('.uw-in', { hasText: 'Hi, are you open today?' }).waitFor();
+  await page.getByText('Hi, are you open today?').first().waitFor({ timeout: 5000 });
+  assert.ok(await visitorConversation());
+});
+
+await step('WC3. a staff reply reaches the open widget live', async () => {
+  await page.getByText('Hi, are you open today?').first().click();
+  await page.fill('textarea[placeholder="Type a message..."]', 'Yes, until 9pm!');
+  await page.keyboard.press('Enter');
+  await site.locator('.uw-out', { hasText: 'Yes, until 9pm!' }).waitFor({ timeout: 5000 });
+  await site.screenshot({ path: SHOTS + 'WC3-widget-reply.png' });
+});
+
+await step('WC4. lead capture updates the contact in the inbox', async () => {
+  await site.getByLabel('Your name').fill('Priya Menon');
+  await site.getByLabel('Phone').fill('+91 98765 43210');
+  await site.getByRole('button', { name: 'Save details' }).click();
+  await site.getByText('Thanks, we have your details!').waitFor();
+  await page.getByText('Priya Menon').first().waitFor({ timeout: 5000 });
+  const contact = (await visitorConversation()).contact;
+  assert.deepEqual([contact.name, contact.phone], ['Priya Menon', '+91 98765 43210']);
+  await page.screenshot({ path: SHOTS + 'WC4-lead.png' });
+});
+
+await step('WC5. a returning visitor sees their history', async () => {
+  await site.reload();
+  await site.getByLabel('Open chat').click();
+  await site.locator('.uw-in', { hasText: 'Hi, are you open today?' }).waitFor();
+  await site.locator('.uw-out', { hasText: 'Yes, until 9pm!' }).waitFor();
+  await site.close();
+});
+
+await step('WC6. the widget refuses unlisted websites', async () => {
+  const key = (await api(`/channels/${(await api('/channels', {}, token)).find(c => c.platform === 'website').id}/widget`, {}, token)).widget_key;
+  const res = await fetch(`${API}/widget/${key}/config`, { headers: { Origin: 'https://evil.example' } });
+  assert.equal(res.status, 403);
+});
+
 // --- AI playground (add-ai-agents) ---
 const chat = async text => {
   const before = await page.locator('.bg-white.rounded-tl-none').filter({ hasText: /\S/ }).count();
@@ -542,11 +606,11 @@ await step('9. reset demo restores the seed', async () => {
   await page.waitForFunction(() => !document.body.innerText.includes('Meera'), null, { timeout: 5000 });
   await page.getByText('Rahul Kumar').first().waitFor();
   const conversations = await api('/conversations', {}, token);
-  assert.equal(conversations.length, 9);
+  assert.equal(conversations.length, 10);
   const agents = await api('/agents', {}, token);
   assert.equal(agents.length, 1);
   assert.equal(agents[0].active_version_number, 1);
-  assert.ok((await api('/channels', {}, token)).every(c => c.adapter_type === 'simulated'));
+  assert.deepEqual((await api('/channels', {}, token)).map(c => c.adapter_type).sort(), ['simulated', 'simulated', 'simulated', 'simulated', 'website']);
   await page.screenshot({ path: SHOTS + '9-reset.png' });
 });
 

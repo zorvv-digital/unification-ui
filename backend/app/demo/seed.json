@@ -219,6 +219,22 @@
           "status": "read"
         }
       ]
+    },
+    {
+      "platform": "website",
+      "customer_id": "5f1c0a3e9b7d4c2a8e6f1b0d3c5a7e9f",
+      "contact": {
+        "name": "Website visitor 5f1c",
+        "avatar": null
+      },
+      "messages": [
+        {
+          "direction": "inbound",
+          "content": "Hi, do you have parking near the salon?",
+          "minutes_ago": 12,
+          "status": "delivered"
+        }
+      ]
     }
   ],
   "knowledge": [
@@ -271,5 +287,6 @@
     "auto_reply_platforms": [
       "whatsapp"
     ]
-  }
+  },
+  "website_greeting": "Hi! Welcome to Glow Salon & Spa. Ask us about services, prices, or bookings."
 }

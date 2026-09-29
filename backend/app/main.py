@@ -34,13 +34,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Auth uses Bearer headers, not cookies, so credentials are not needed for CORS.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+class PathCORS:
+    """
+    CORS per path: the public website widget API is called from customers' sites, so it accepts any origin
+    (it checks the widget's allowed domains itself); everything else only allows `CORS_ORIGINS`.
+    Auth uses Bearer headers, not cookies, so credentials are not needed for CORS.
+    """
+
+    def __init__(self, app):
+        self.widget = CORSMiddleware(app, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+        self.default = CORSMiddleware(app, allow_origins=settings.CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+
+    async def __call__(self, scope, receive, send):
+        is_widget = scope["type"] == "http" and scope["path"].startswith(f"{settings.API_V1_STR}/widget")
+        await (self.widget if is_widget else self.default)(scope, receive, send)
+
+
+app.add_middleware(PathCORS)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

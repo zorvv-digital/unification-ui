@@ -1,8 +1,7 @@
 import asyncio
 import json
-import uuid
 from collections import defaultdict
-from typing import AsyncIterator
+from typing import AsyncIterator, Hashable
 
 from pydantic import BaseModel
 
@@ -17,15 +16,16 @@ class EventService(BaseService):
     """
 
     # ponytail: in-process queues, single server process only; move to Redis pub/sub when running multiple workers.
-    _subscribers: dict[uuid.UUID, set[asyncio.Queue]] = defaultdict(set)
+    # Keyed by workspace id for staff; website visitors use ("visitor", visitor_id).
+    _subscribers: dict[Hashable, set[asyncio.Queue]] = defaultdict(set)
 
     @classmethod
-    def publish(cls, workspace_id: uuid.UUID, event: str, data: BaseModel) -> None:
+    def publish(cls, workspace_id: Hashable, event: str, data: BaseModel) -> None:
         """
         Sends an event to every client connected for the workspace.
 
         Args:
-            workspace_id (uuid.UUID): Workspace whose clients receive the event.
+            workspace_id (Hashable): Workspace (or visitor key) whose clients receive the event.
             event (str): Event name, e.g. `message.created`.
             data (BaseModel): Response schema serialized as the event payload.
         """
@@ -34,12 +34,12 @@ class EventService(BaseService):
             queue.put_nowait((event, payload))
 
     @classmethod
-    async def stream(cls, workspace_id: uuid.UUID) -> AsyncIterator[str]:
+    async def stream(cls, workspace_id: Hashable) -> AsyncIterator[str]:
         """
         Yields server-sent event frames for one client until it disconnects.
 
         Args:
-            workspace_id (uuid.UUID): Workspace to subscribe to.
+            workspace_id (Hashable): Workspace (or visitor key) to subscribe to.
 
         Yields:
             str: SSE frames, plus a keepalive comment when idle.

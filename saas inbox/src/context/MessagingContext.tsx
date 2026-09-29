@@ -92,9 +92,12 @@ export function messagingReducer(state: MessagingState, action: MessagingAction)
       const conversations = exists
         ? state.conversations.map(c => (c.id === conversation.id ? conversation : c))
         : [...state.conversations, conversation];
-      const contacts = contact && !state.contacts.some(c => c.id === contact.id)
-        ? [...state.contacts, contact]
-        : state.contacts;
+      // The server copy of the contact wins too (e.g. a website visitor left their name and phone).
+      const contacts = !contact
+        ? state.contacts
+        : state.contacts.some(c => c.id === contact.id)
+          ? state.contacts.map(c => (c.id === contact.id ? contact : c))
+          : [...state.contacts, contact];
       return {
         ...state,
         contacts,

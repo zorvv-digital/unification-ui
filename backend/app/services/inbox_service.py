@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Contact, Conversation, Message, utcnow
-from app.models.schemas import ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
+from app.models.schemas import VisitorMessage, ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
 from app.providers.whatsapp import PLACEHOLDER
 from app.services.base import BaseService
 from app.services.channel_service import ADAPTERS, ChannelError, ChannelService, InboundMessage, StatusUpdate, TokenError
@@ -384,3 +384,5 @@ class InboxService(BaseService):
     def _publish(conversation: Conversation, message: Message) -> None:
         EventService.publish(conversation.workspace_id, "message.created", MessageResponse.model_validate(message))
         EventService.publish(conversation.workspace_id, "conversation.updated", ConversationResponse.model_validate(conversation))
+        if conversation.platform == "website":  # the visitor's open widget gets staff and AI replies live
+            EventService.publish(("visitor", conversation.external_id), "message.created", VisitorMessage.model_validate(message))

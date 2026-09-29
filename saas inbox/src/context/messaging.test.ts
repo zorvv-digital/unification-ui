@@ -50,6 +50,15 @@ describe('messagingReducer', () => {
     expect(next.contacts).toHaveLength(1);
   });
 
+  it('replaces a known contact with the server copy (e.g. a website lead left their name)', () => {
+    const start = state({ conversations: [conversation('a', 100)], contacts: [{ id: 'contact-a', name: 'Website visitor 5f1c' }] });
+    const next = messagingReducer(start, {
+      type: 'CONVERSATION_UPDATED',
+      payload: { conversation: conversation('a', 100), contact: { id: 'contact-a', name: 'Priya', phone: '+91 98765 43210' } },
+    });
+    expect(next.contacts).toEqual([{ id: 'contact-a', name: 'Priya', phone: '+91 98765 43210' }]);
+  });
+
   it('updates a message in place when its delivery status changes', () => {
     const start = state({ messages: [message('m1', 'a', 'outbound'), message('m2', 'a', 'inbound')] });
     const next = messagingReducer(start, { type: 'MESSAGE_UPDATED', payload: { ...message('m1', 'a', 'outbound'), status: 'read' } });

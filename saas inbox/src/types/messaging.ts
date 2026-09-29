@@ -1,4 +1,4 @@
-export type Platform = 'whatsapp' | 'instagram' | 'messenger' | 'gmail';
+export type Platform = 'whatsapp' | 'instagram' | 'messenger' | 'gmail' | 'website';
 
 export interface Contact {
   id: string;

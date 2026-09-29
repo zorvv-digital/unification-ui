@@ -30,6 +30,14 @@ export interface MetaCredentials {
   app_secret: string;
 }
 
+export interface WidgetSettings {
+  widget_key: string;
+  allowed_domains: string[];
+  greeting: string;
+  lead_fields: ('name' | 'email' | 'phone')[];
+  embed_snippet: string;
+}
+
 export interface Template {
   name: string;
   language: string;
@@ -49,6 +57,11 @@ export const channelApi = {
     api().request<Channel & WebhookInfo>('/channels/whatsapp', { method: 'POST', body: JSON.stringify(credentials) }),
   connectMeta: (credentials: MetaCredentials) =>
     api().request<(Channel & WebhookInfo)[]>('/channels/meta', { method: 'POST', body: JSON.stringify(credentials) }),
+  createWebsiteChat: (settings: Partial<Omit<WidgetSettings, 'widget_key' | 'embed_snippet'>>) =>
+    api().request<Channel>('/channels/website', { method: 'POST', body: JSON.stringify(settings) }),
+  getWidget: (id: string) => api().request<WidgetSettings>(`/channels/${id}/widget`),
+  updateWidget: (id: string, settings: Partial<Omit<WidgetSettings, 'widget_key' | 'embed_snippet'>>) =>
+    api().request<WidgetSettings>(`/channels/${id}/widget`, { method: 'PATCH', body: JSON.stringify(settings) }),
   authorizeGmail: () => api().request<{ authorize_url: string }>('/channels/gmail/authorize', { method: 'POST' }),
   webhookInfo: (id: string) => api().request<WebhookInfo>(`/channels/${id}/webhook`),
   disconnect: (id: string) => api().request<void>(`/channels/${id}`, { method: 'DELETE' }),

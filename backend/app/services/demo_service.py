@@ -17,6 +17,7 @@ from app.services.auth_service import AuthService
 from app.services.base import BaseService
 from app.services.channel_service import InboundMessage
 from app.services.inbox_service import InboxService
+from app.services.website_service import WebsiteService
 
 logger = logging.getLogger("demo")
 
@@ -83,7 +84,7 @@ class DemoService(BaseService):
         await db.execute(delete(Message).where(Message.workspace_id == workspace.id))
         await db.execute(delete(Conversation).where(Conversation.workspace_id == workspace.id))
         await db.execute(delete(Contact).where(Contact.workspace_id == workspace.id))
-        # Real numbers connected during a demo go too; only the seeded simulated channels remain.
+        # Real channels connected during a demo go too; the website widget is recreated from the seed.
         await db.execute(delete(Channel).where(Channel.workspace_id == workspace.id, Channel.adapter_type != "simulated"))
         agent_ids = await db.execute(select(Agent.id).where(Agent.workspace_id == workspace.id))
         await AgentService.delete_agents(db, list(agent_ids.scalars().all()))
@@ -145,6 +146,12 @@ class DemoService(BaseService):
                     workspace_id=workspace_id, platform=platform, name=f"Demo {platform.title()}", adapter_type="simulated"
                 )
                 db.add(channel_by_platform[platform])
+        website = await db.execute(select(Channel).where(Channel.workspace_id == workspace_id, Channel.adapter_type == "website"))
+        channel_by_platform["website"] = website.scalars().first() or Channel(
+            workspace_id=workspace_id, platform="website", adapter_type="website", name="Website chat",
+            config=WebsiteService.new_config(["localhost", "127.0.0.1"], seed["website_greeting"], ["name", "phone"]),
+        )
+        db.add(channel_by_platform["website"])
         await db.flush()
         now = datetime.now(timezone.utc)
 

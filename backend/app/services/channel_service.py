@@ -16,6 +16,7 @@ from app.models.schemas import ChannelResponse, ChannelUpdate, MetaConnect, Simu
 from app.providers.base import ChannelError, InboundMessage, StatusUpdate, TokenError, WebhookAuthError  # noqa: F401 (re-exported)
 from app.providers.gmail import SCOPES, GmailAdapter
 from app.providers.messenger import MessengerAdapter
+from app.providers.website import WebsiteAdapter
 from app.providers.whatsapp import WhatsAppAdapter
 from app.services.base import BaseService
 from app.services.crypto import encrypt_secret
@@ -39,7 +40,7 @@ class SimulatedAdapter:
 _messenger = MessengerAdapter()
 ADAPTERS = {
     "simulated": SimulatedAdapter(), "whatsapp": WhatsAppAdapter(), "messenger": _messenger, "instagram": _messenger,
-    "gmail": GmailAdapter(),
+    "gmail": GmailAdapter(), "website": WebsiteAdapter(),
 }
 
 

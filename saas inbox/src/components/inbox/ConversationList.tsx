@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Mail } from 'lucide-react';
+import { MessageSquare, Mail, Globe } from 'lucide-react';
 import { InstagramIcon } from '../icons/InstagramIcon';
 import { FaWhatsapp } from 'react-icons/fa';
 import { ChannelSummary } from './ChannelSummary';
@@ -63,6 +63,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             } else if (conv.platform === 'gmail') {
               PlatformIcon = Mail;
               iconColor = 'text-red-500';
+            } else if (conv.platform === 'website') {
+              PlatformIcon = Globe;
+              iconColor = 'text-gray-900';
             }
 
             return (

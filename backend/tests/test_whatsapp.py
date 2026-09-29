@@ -342,4 +342,4 @@ def test_demo_reset_removes_connected_numbers(client, demo_headers, graph):
     assert _connect(client, demo_headers).status_code == 201
     assert client.post(f"{API}/demo/reset", headers=demo_headers).status_code == 204
     channels = client.get(f"{API}/channels", headers=demo_headers).json()
-    assert sorted(c["adapter_type"] for c in channels) == ["simulated"] * 4
+    assert sorted(c["adapter_type"] for c in channels) == ["simulated"] * 4 + ["website"]

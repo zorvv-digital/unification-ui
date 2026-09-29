@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glow Salon &amp; Spa</title>
+  <style>
+    body { margin: 0; font: 16px/1.6 system-ui, -apple-system, Segoe UI, sans-serif; color: #111827; background: #fafaf9; }
+    header { padding: 20px 40px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    header b { font-size: 20px; }
+    .hero { padding: 80px 40px; max-width: 760px; }
+    .hero h1 { font-size: 44px; line-height: 1.1; margin: 0 0 16px; }
+    .hero p { color: #4b5563; font-size: 18px; }
+    .services { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; padding: 0 40px 80px; max-width: 1000px; }
+    .services div { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; }
+    .note { font-size: 13px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <header><b>Glow Salon &amp; Spa</b><span class="note">Demo website for the Unification chat widget</span></header>
+  <section class="hero">
+    <h1>Look good. Feel better.</h1>
+    <p>Haircuts, colour, facials and massages in the heart of the city. Questions about prices or bookings?
+       Use the chat button in the corner: your message goes straight to the team's unified inbox.</p>
+  </section>
+  <section class="services">
+    <div><b>Haircut</b><p>From 500 INR</p></div>
+    <div><b>Facial</b><p>From 1,200 INR</p></div>
+    <div><b>Massage</b><p>From 1,500 INR</p></div>
+  </section>
+  {{WIDGET_SNIPPET}}
+</body>
+</html>

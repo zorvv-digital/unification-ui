@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, PanelRight, Phone, Search, MoreVertical, Paperclip, Smile, Send, Mail, Bot, Sparkles } from 'lucide-react';
+import { ArrowLeft, PanelRight, Phone, Search, MoreVertical, Paperclip, Smile, Send, Mail, Bot, Sparkles, Globe } from 'lucide-react';
 import { Avatar } from '../messaging/Avatar';
 import { apiService } from '../../context/MessagingContext';
 import { aiApi } from '../../services/aiApi';
@@ -103,7 +103,9 @@ export const MessageWorkspace: React.FC<MessageWorkspaceProps> = ({
     iconColor = 'text-[#0084FF]';
   } else if (conversation.platform === 'gmail') {
     PlatformIcon = Mail;
-    iconColor = 'text-red-500';
+    iconColor = 'text-red-500';  } else if (conversation.platform === 'website') {
+    PlatformIcon = Globe;
+    iconColor = 'text-gray-900';
   }
 
   return (

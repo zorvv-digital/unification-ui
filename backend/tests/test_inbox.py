@@ -24,7 +24,7 @@ def _conversation_for(client, headers, customer_id):
 
 def test_channels_hide_config(client, demo_headers):
     channels = client.get(f"{API}/channels", headers=demo_headers).json()
-    assert {c["platform"] for c in channels} == {"whatsapp", "instagram", "messenger", "gmail"}
+    assert {c["platform"] for c in channels} == {"whatsapp", "instagram", "messenger", "gmail", "website"}
     assert all("config" not in c for c in channels)
 
 

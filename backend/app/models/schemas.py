@@ -369,3 +369,71 @@ class PlaygroundChatResponse(BaseModel):
     reply: str
     session_id: str
     version_number: int
+
+
+# ==========================================
+# Website chat
+# ==========================================
+
+LeadField = Literal["name", "email", "phone"]
+DOMAIN_PATTERN = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+Domain = Annotated[str, Field(pattern=DOMAIN_PATTERN, max_length=253)]
+
+
+class WebsiteCreate(BaseModel):
+    """Hostnames the widget may run on (`example.com` also allows its subdomains)."""
+    allowed_domains: list[Domain] = []
+    greeting: Optional[str] = Field(None, max_length=500)
+    lead_fields: list[LeadField] = ["name", "email", "phone"]
+
+
+class WidgetUpdate(BaseModel):
+    allowed_domains: Optional[list[Domain]] = None
+    greeting: Optional[str] = Field(None, min_length=1, max_length=500)
+    lead_fields: Optional[list[LeadField]] = None
+
+
+class WidgetSettings(BaseModel):
+    widget_key: str
+    allowed_domains: list[str]
+    greeting: str
+    lead_fields: list[str]
+    embed_snippet: str
+
+
+class WidgetConfig(BaseModel):
+    """What the widget shows; public."""
+    business_name: str
+    greeting: str
+    lead_fields: list[str]
+
+
+class VisitorSession(BaseModel):
+    visitor_token: str
+
+
+class VisitorMessageCreate(BaseModel):
+    content: str = Field(max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def content_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("content must not be blank")
+        return value.strip()
+
+
+class VisitorMessage(BaseModel):
+    """A chat message as the visitor sees it."""
+    id: uuid.UUID
+    direction: str
+    type: str
+    content: str
+    timestamp: UtcDatetime = Field(validation_alias="created_at")
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LeadSubmit(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    email: Optional[str] = Field(None, pattern=EMAIL_PATTERN, max_length=255)
+    phone: Optional[str] = Field(None, min_length=3, max_length=50)

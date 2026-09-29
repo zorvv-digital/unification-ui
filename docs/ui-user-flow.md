@@ -2,7 +2,7 @@
 
 How to run the platform locally and walk through the demo as a business user would.
 The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend pointed at the
-mock Meta and Google APIs it runs, see §13).
+mock Meta and Google APIs it runs, see §14).
 
 ## 0. Run both apps
 
@@ -188,7 +188,23 @@ Click **Gmail** in the sidebar (under *Channels*): the **Gmail** window opens. T
 5. **Disconnect.** Click **Disconnect** next to the address and confirm. **Reset demo data** removes connected Gmail accounts
    from the demo workspace.
 
-## 13. Automated E2E
+## 13. Website chat
+
+Click **Website chat** in the sidebar (under *Channels*).
+
+1. **Settings.** The demo already has a widget. The window shows the **Embed code** to paste into the website, the
+   **Allowed domains** (the widget only works on these sites; `example.com` also covers its subdomains), the **Greeting**,
+   and which details to **Ask visitors for**. Change the greeting → **Save** → *Saved.* A new business sees
+   **Create chat widget** instead.
+2. **Chat as a visitor.** Click **Open demo page**: a sample salon website opens in a new tab. Click the chat button in the
+   bottom-right corner, see the greeting, and send `Hi, are you open today?`. Back in the Inbox, a **Website visitor**
+   conversation (globe icon) appears live; the **Website** filter chip shows only these.
+3. **Reply.** Answer in the Inbox: the reply appears in the visitor's open chat right away.
+4. **Lead.** After the first message the widget asks *"Leave your details"*. Enter a name and phone → **Save details**.
+   The conversation in the Inbox is renamed live and the contact panel shows the phone.
+5. **Returning visitor.** Reload the demo page and open the chat: the earlier messages are still there.
+
+## 14. Automated E2E
 
 `npm run e2e` runs this whole guide in a browser against mock Meta and Google APIs that it starts on port 8765.
 Start the backend for it with:
@@ -202,7 +218,7 @@ GMAIL_API_URL=http://127.0.0.1:8765/gmail/v1 \
 uv run uvicorn app.main:app --port 8000
 ```
 
-## 14. Sign out
+## 15. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 
@@ -212,4 +228,4 @@ Click the **log-out icon** next to your name. You return to **Sign in**.
 
 There is no sign-up screen yet. Create a workspace with `POST /auth/register` in Swagger, then sign in with that email.
 A new business starts with an empty inbox and no channels. Connect a WhatsApp number as in §10, a Facebook Page with
-Instagram as in §11, and Gmail as in §12; website chat is connected in a later change.
+Instagram as in §11, Gmail as in §12, and add the website chat widget as in §13.

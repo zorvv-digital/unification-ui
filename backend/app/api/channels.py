@@ -17,6 +17,9 @@ from app.models.schemas import (
     GmailAuthorize,
     MetaConnect,
     SyncResult,
+    WebsiteCreate,
+    WidgetSettings,
+    WidgetUpdate,
     TemplateResponse,
     WebhookInfo,
     WebhookResult,
@@ -27,6 +30,7 @@ from app.services.channel_service import ADAPTERS, ChannelError, ChannelService,
 from app.config.settings import settings
 from app.services.inbox_service import InboxService
 from app.services.sync_service import SyncService
+from app.services.website_service import WebsiteService
 
 router = APIRouter(prefix="/channels", tags=["Channels"])
 webhook_router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -95,6 +99,28 @@ async def gmail_callback(
         except ChannelError:
             result = "error"
     return RedirectResponse(f"{settings.FRONTEND_URL}/inbox?gmail={result}", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/website", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
+async def create_website_chat(data: WebsiteCreate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Creates the workspace's website chat widget (one per workspace; 409 if it exists). `allowed_domains` are the
+    hostnames the widget may run on (`example.com` also allows subdomains); `lead_fields` are asked from visitors.
+    Get the embed snippet from `GET /channels/{id}/widget`.
+    """
+    return await WebsiteService.create(db=db, workspace_id=user.workspace_id, data=data)
+
+
+@router.get("/{channel_id}/widget", response_model=WidgetSettings)
+async def get_widget(channel_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """The website chat widget's settings and the `embed_snippet` to paste into the site's HTML."""
+    return await WebsiteService.get_settings(db=db, workspace_id=user.workspace_id, channel_id=channel_id)
+
+
+@router.patch("/{channel_id}/widget", response_model=WidgetSettings)
+async def update_widget(channel_id: uuid.UUID, data: WidgetUpdate, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Updates the widget's allowed domains, greeting, or lead fields."""
+    return await WebsiteService.update(db=db, workspace_id=user.workspace_id, channel_id=channel_id, data=data)
 
 
 @router.post("/{channel_id}/sync", response_model=SyncResult)

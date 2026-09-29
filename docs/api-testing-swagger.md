@@ -69,7 +69,7 @@ Re-authorize with the demo token before continuing.
 ## 3. Channels
 
 `GET /api/v1/channels` → Execute.
-Expect four channels, `whatsapp`, `instagram`, `messenger`, `gmail`, all `adapter_type: "simulated"`, `status: "connected"`, and **no `config` field**.
+Expect five channels: `whatsapp`, `instagram`, `messenger`, `gmail` with `adapter_type: "simulated"`, and the real `website` chat widget (§14), all `status: "connected"`, and **no `config` field**.
 WhatsApp has `ai_enabled: true` with the demo agent as `ai_agent_id`; the others have `ai_enabled: false` (see §10).
 **Copy the `id` of the WhatsApp channel** (CHANNEL_ID).
 
@@ -79,7 +79,7 @@ WhatsApp has `ai_enabled: true` with the demo agent as `ai_agent_id`; the others
 
 ### 4.1 List conversations
 `GET /api/v1/conversations` → Execute (no parameters).
-Expect 9 conversations, newest `last_message_at` first, each with `contact`, `unread_count`, `last_message_preview`. Timestamps end with `+00:00`.
+Expect 10 conversations, newest `last_message_at` first, each with `contact`, `unread_count`, `last_message_preview`. Timestamps end with `+00:00`.
 The three `gmail` ones are email threads and also have a `subject` (other channels have `subject: null`).
 **Copy the first conversation's `id`** (CONV_ID) and its `contact.id` (CONTACT_ID).
 
@@ -188,7 +188,7 @@ A real business's messages never get simulated replies; it has no channels until
 
 Authorize with the demo token again.
 `POST /api/v1/demo/reset` → `204`.
-`GET /conversations`: back to the 9 seeded conversations; Meera and all messages you sent are gone, and unread counts are restored.
+`GET /conversations`: back to the 10 seeded conversations; Meera and all messages you sent are gone, and unread counts are restored.
 
 ---
 
@@ -471,3 +471,45 @@ There is no 24-hour window for email.
 Remove the app in the Google account (**Security → Third-party apps with account access**). The next sync
 (or `POST /channels/{GMAIL_ID}/sync`) sets the channel to `status: "disconnected"` and emits `channel.updated`; a reply
 is stored as `failed` and also disconnects it. Sign in again (§13.1) to reconnect the same channel.
+
+## 14. Website chat
+
+A chat button for the business's own website. Visitors' messages become `website` conversations in the inbox and staff
+replies reach them live. The demo workspace already has a widget; its demo page is
+**http://localhost:8000/api/v1/widget/demo**.
+
+### 14.1 Widget settings (staff, authorized)
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Create | `POST /channels/website` (as the second business) | `{"allowed_domains": ["cornercafe.example"]}` | `201`, `platform: "website"`. Copy the `id` (WEB_ID) |
+| Again | same | | `409`: one widget per workspace |
+| Settings | `GET /channels/{WEB_ID}/widget` | none | `widget_key`, `allowed_domains`, `greeting`, `lead_fields: ["name","email","phone"]`, and `embed_snippet` (`<script src=".../widget.js" data-widget-key="..." async>`) |
+| Update | `PATCH /channels/{WEB_ID}/widget` | `{"greeting": "Hi! Ask us anything.", "lead_fields": ["phone"]}` | updated settings |
+| Bad values | same | `{"lead_fields": ["age"]}` or `{"allowed_domains": ["https://x.com/page"]}` | `422` (domains are bare hostnames) |
+
+### 14.2 Visitor API (public, no Authorize)
+These are called by the widget on the customer's site. Swagger sends no `Origin`, so every call here returns `403`
+("not allowed"): that is the allowed-domains check. Try them with curl, sending an allowed origin (the demo widget allows
+`localhost`; get its key from `GET /channels/{demo website id}/widget`):
+
+```bash
+KEY=<widget_key>; O="Origin: http://localhost:3000"
+curl -H "$O" http://localhost:8000/api/v1/widget/$KEY/config            # business_name, greeting, lead_fields
+TOKEN=$(curl -s -X POST -H "$O" http://localhost:8000/api/v1/widget/$KEY/sessions | python -c "import sys,json;print(json.load(sys.stdin)['visitor_token'])")
+curl -X POST -H "$O" -H "X-Visitor-Token: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"content": "Hi, are you open today?"}' http://localhost:8000/api/v1/widget/$KEY/messages   # 201
+curl -H "$O" -H "X-Visitor-Token: $TOKEN" http://localhost:8000/api/v1/widget/$KEY/messages        # history
+curl -X POST -H "$O" -H "X-Visitor-Token: $TOKEN" -H "Content-Type: application/json" \
+     -d '{"name": "Priya", "phone": "+91 98765 43210"}' http://localhost:8000/api/v1/widget/$KEY/lead # saved
+```
+
+| Check | Expect |
+|---|---|
+| First message | `GET /conversations` (staff) shows a `website` conversation "Website visitor xxxx" with the message |
+| Staff reply | `POST /conversations/{id}/messages`: the visitor's `GET .../messages` includes it (`direction: "outbound"`); an open widget gets it live from `GET /widget/{key}/events?token=...` |
+| Lead | the conversation's contact now has name "Priya" and the phone; a malformed `email` gives `422` and changes nothing; before the first message `404` |
+| Other origin | `Origin: https://evil.example` → `403`; no `Origin` → `403` |
+| Bad token | a missing or made-up `X-Visitor-Token` → `401` |
+| Limits | content over 2,000 characters → `422`; the 21st message within a minute from one visitor → `429` |
+| Webhook | `POST /webhooks/{WEB_ID}` → `401` (visitors only use the widget API) |
+
