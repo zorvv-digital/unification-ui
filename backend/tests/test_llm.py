@@ -29,6 +29,7 @@ def _use_openai(monkeypatch, handler):
     monkeypatch.setattr(settings, "LLM_MODEL", "test-model")
     monkeypatch.setattr(settings, "LLM_BASE_URL", "https://llm.test/v1")
     monkeypatch.setattr(llm, "_transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(llm, "RETRY_DELAY_SECONDS", 0)
 
 
 def _completion(content: str) -> httpx.Response:
@@ -71,7 +72,9 @@ def test_openai_schema_completion_requests_and_validates_json(monkeypatch):
     _use_openai(monkeypatch, handler)
     result = _run(llm.complete([{"role": "user", "content": "Q"}], schema=Answer))
     assert result == Answer(answer="yes", confidence=9)
-    assert seen["body"]["response_format"] == {"type": "json_object"}
+    assert seen["body"]["response_format"] == {
+        "type": "json_schema", "json_schema": {"name": "Answer", "schema": Answer.model_json_schema()},
+    }
     assert "confidence" in seen["body"]["messages"][0]["content"]
 
 
@@ -85,6 +88,48 @@ def test_openai_failures_raise_llm_error(monkeypatch, handler):
     _use_openai(monkeypatch, handler)
     with pytest.raises(llm.LLMError):
         _run(llm.complete([{"role": "user", "content": "Q"}], schema=Answer))
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_openai_retries_once_on_overload(monkeypatch, status):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(status, json={"error": "busy"}) if len(calls) == 1 else _completion("Back again")
+
+    _use_openai(monkeypatch, handler)
+    assert _run(llm.complete([{"role": "user", "content": "Hi"}])) == "Back again"
+    assert len(calls) == 2
+
+
+def test_openai_gives_up_after_three_attempts(monkeypatch):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, json={"error": "high demand"}) if len(calls) < 3 else _completion("Third time lucky")
+
+    _use_openai(monkeypatch, handler)
+    assert _run(llm.complete([{"role": "user", "content": "Hi"}])) == "Third time lucky"
+    calls.clear()
+    monkeypatch.setattr(llm, "_transport", httpx.MockTransport(lambda request: calls.append(request) or httpx.Response(503)))
+    with pytest.raises(llm.LLMError):
+        _run(llm.complete([{"role": "user", "content": "Hi"}]))
+    assert len(calls) == 3
+
+
+def test_openai_does_not_retry_client_errors(monkeypatch):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(404, json={"error": "no such model"})
+
+    _use_openai(monkeypatch, handler)
+    with pytest.raises(llm.LLMError):
+        _run(llm.complete([{"role": "user", "content": "Hi"}]))
+    assert len(calls) == 1
 
 
 def test_openai_without_key_raises_llm_error(monkeypatch):

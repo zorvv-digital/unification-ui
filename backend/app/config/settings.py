@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # LLM: "fake" (offline, deterministic) or "openai" (any OpenAI-compatible API: OpenAI, Gemini, NVIDIA NIM)
     LLM_PROVIDER: str = "fake"
     LLM_API_KEY: Optional[str] = None
-    LLM_MODEL: str = "gemini-2.5-flash"
+    LLM_MODEL: str = "gemini-3.6-flash"
     LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     LLM_TIMEOUT_SECONDS: float = 60.0
 

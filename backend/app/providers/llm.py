@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -16,6 +17,10 @@ Messages = list[dict[str, str]]
 
 # Tests swap in httpx.MockTransport here.
 _transport: Optional[httpx.AsyncBaseTransport] = None
+# Providers answer 429/5xx when overloaded ("high demand"); retrying with backoff rides out most spikes.
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 1.0  # doubles after each retry
 
 
 class LLMError(Exception):
@@ -56,15 +61,20 @@ async def _openai_complete(messages: Messages, schema: Optional[type[T]]) -> Uni
             f"{json.dumps(schema.model_json_schema())}"
         )
         body["messages"] = [{"role": "system", "content": instruction}, *messages]
-        body["response_format"] = {"type": "json_object"}
+        # Structured output: the provider enforces the schema (models ignore schemas that are only in the prompt).
+        body["response_format"] = {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
 
     try:
         async with httpx.AsyncClient(transport=_transport, timeout=settings.LLM_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"},
-                json=body,
-            )
+            for attempt in range(ATTEMPTS):
+                response = await client.post(
+                    f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"},
+                    json=body,
+                )
+                if response.status_code not in RETRY_STATUSES or attempt == ATTEMPTS - 1:
+                    break
+                await asyncio.sleep(RETRY_DELAY_SECONDS * 2**attempt)
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
