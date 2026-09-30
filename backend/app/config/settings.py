@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gemini-3.6-flash"
     LLM_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai"
     LLM_TIMEOUT_SECONDS: float = 60.0
+    # Decision model for classifying customers (product interest): "fake" (offline keyword match) or "laya"
+    # (open-source Laya, run locally; install with `uv sync --extra laya`).
+    DECISION_PROVIDER: str = "fake"
+    DECISION_THRESHOLD: float = 0.5  # tuned on Laya: interested customers scored 0.61-0.83, unrelated ones <= 0.16
 
     # Channels
     PUBLIC_BASE_URL: str = "http://localhost:8000"  # where Meta reaches this server (webhook URLs shown to users)

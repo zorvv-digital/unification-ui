@@ -635,3 +635,51 @@ curl -N "http://localhost:8000/api/v1/customer-app/events?token=$T"     # leave 
 | Missing, made-up, or other-workspace `X-Customer-Token` | `401` (the app then starts a new session) |
 | `platform: "fax"`, blank content, or content over 2,000 characters | `422` |
 | The 21st message within a minute from one session | `429` |
+
+---
+
+## 17. Products and customer product interest
+
+The full contract is in `docs/api-product-interest.md`. Each contact is tagged with the products they are interested
+in, decided from all their chats by a decision model:
+- `DECISION_PROVIDER=fake` is the default and works offline by matching product names and keywords.
+- `DECISION_PROVIDER=laya` runs the open-source Laya model locally. Install it with `uv sync --extra laya`. The first
+  analysis downloads the model (about 1.5GB, a few minutes); after that each analysis takes under a second on CPU.
+
+Set `DECISION_THRESHOLD` to change the minimum confidence (default 0.5). Everything is under the **Products** and
+**Contacts** tags. Stay authorized as the demo user.
+
+### 17.1 Products
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| List | `GET /products` | none | the seeded salon products (Bridal makeup, Facial, Hair colouring, Haircut, Massage) with `interested_count` |
+| Create | `POST /products` | `{"name": "Nail art", "description": "Gel nails and nail designs", "keywords": ["nails", "manicure", "nail art"]}` | `201`, a palette `color`. Copy the `id` (NAIL_ID). Existing chats are re-analysed in the background |
+| Duplicate | same | `{"name": " nail ART "}` | `409` |
+| Invalid | same | `{"name": "X", "color": "red"}`, or 21 keywords | `422` |
+| Edit | `PATCH /products/{NAIL_ID}` | `{"keywords": ["nails", "gel nails"]}` | updated; chats re-analysed |
+| Delete | `DELETE /products/{NAIL_ID}` | none | `204`; it disappears from every contact |
+
+### 17.2 A customer is tagged from their chat
+1. Simulate a customer on the demo WhatsApp channel with `POST /webhooks/{WhatsApp channel id}` and
+   `{"customer_id": "+919800012345", "name": "Meera", "content": "Hi! Do you do balayage? How much for long hair?"}`.
+   The customer app (`/phone`) works too.
+2. After a moment (the first Laya call is slower), `GET /contacts?q=Meera` shows `product_status: "determined"` and
+   `product_interests` including **Hair colouring** with `source: "ai"` and a `confidence`. Open inboxes got it live
+   in `conversation.updated`.
+3. Send `"Do you have parking?"` from a new customer. Their `product_status` becomes `not_determined`.
+4. The same customer asking later about another product gets both interests, because interests accumulate.
+
+### 17.3 Staff corrections
+| Step | Endpoint | Expect |
+|---|---|---|
+| Remove a wrong interest | `DELETE /contacts/{id}/product-interests/{product_id}` | gone, and the AI never adds it back for this contact |
+| Add one | `POST /contacts/{id}/product-interests/{product_id}` | `source: "staff"`, `confidence: null`; the AI never removes it |
+| Re-detect | `POST /contacts/{id}/product-interests/classify` | the contact re-analysed now; `502` if the decision model is unavailable |
+
+### 17.4 Filters and segments
+- `GET /contacts?product_ids={id}` lists contacts interested in that product (repeat `product_ids` for any of
+  several). `GET /contacts?product_status=not_determined` lists contacts whose chats matched no product; another
+  value gives `422`.
+- `POST /segments/preview` with `{"rules": {"products": ["<Bridal makeup id>"]}}` returns Priya, Ananya and anyone
+  newly tagged. Add `"products_match": "all"` to require every listed product.
+- **Demo reset** restores the seeded products and interests.

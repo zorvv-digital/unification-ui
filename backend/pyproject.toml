@@ -17,6 +17,11 @@ dependencies = [
     "uvicorn[standard]>=0.28.0",
 ]
 
+[project.optional-dependencies]
+laya = [
+    "laya>=0.3.22",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",

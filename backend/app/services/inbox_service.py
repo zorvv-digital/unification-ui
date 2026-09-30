@@ -332,6 +332,8 @@ class InboxService(BaseService):
         db.add(message)
         await db.commit()
         cls._publish(conversation, message)
+        from app.services.product_service import ProductService  # product_service imports crm_service, which is above this layer
+        ProductService.schedule_contact(conversation.contact_id)  # what is this customer interested in?
         return message
 
     @classmethod

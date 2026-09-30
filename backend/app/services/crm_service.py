@@ -67,7 +67,8 @@ class ContactService(BaseService):
 
     @classmethod
     async def list_items(
-        cls, db: AsyncSession, workspace_id: uuid.UUID, q: Optional[str] = None, tag_ids: Sequence[uuid.UUID] = ()
+        cls, db: AsyncSession, workspace_id: uuid.UUID, q: Optional[str] = None, tag_ids: Sequence[uuid.UUID] = (),
+        product_ids: Sequence[uuid.UUID] = (), product_status: Optional[str] = None,
     ) -> list[ContactListItem]:
         """
         Lists workspace contacts with their channels and last activity, most recently active first.
@@ -77,6 +78,8 @@ class ContactService(BaseService):
             workspace_id (uuid.UUID): Caller's workspace.
             q (Optional[str]): Text matched against name, phone, and email, ignoring case.
             tag_ids (Sequence[uuid.UUID]): Keep contacts having any of these tags.
+            product_ids (Sequence[uuid.UUID]): Keep contacts interested in any of these products.
+            product_status (Optional[str]): Keep contacts with this product status.
 
         Returns:
             list[ContactListItem]: Matching contacts.
@@ -102,6 +105,10 @@ class ContactService(BaseService):
             if needle and not any(needle in (value or "").lower() for value in (contact.name, contact.phone, contact.email)):
                 continue
             if wanted and not wanted & {t.id for t in contact.tags}:
+                continue
+            if product_ids and not set(product_ids) & {i.product_id for i in contact.product_interests}:
+                continue
+            if product_status and contact.product_status != product_status:
                 continue
             items.append(ContactListItem(
                 **ContactResponse.model_validate(contact).model_dump(),
@@ -155,7 +162,7 @@ class ContactService(BaseService):
     @classmethod
     async def merge(cls, db: AsyncSession, workspace_id: uuid.UUID, target_id: uuid.UUID, source_id: uuid.UUID) -> Contact:
         """
-        Merges the source contact into the target: conversations and tags move over, the target's empty profile
+        Merges the source contact into the target: conversations, tags, and product interests move over, the target's empty profile
         fields are filled from the source (consent too while the target's is `unknown`), and the source is deleted.
 
         Raises:
@@ -174,6 +181,8 @@ class ContactService(BaseService):
                 setattr(target, field, getattr(source, field))
         if target.consent == "unknown" and source.consent != "unknown":
             target.consent, target.consent_changed_at = source.consent, source.consent_changed_at
+        from app.services.product_service import ProductService  # product_service imports this module
+        ProductService.merge_links(target, source)
         await db.delete(source)  # its contact_tags rows go with it (secondary relationship)
         await db.commit()
         await cls.publish(db, target)
@@ -442,6 +451,10 @@ class SegmentService(BaseService):
             return False
         if rules.consent and contact.consent not in rules.consent:
             return False
+        if rules.products:
+            wanted, interested = set(rules.products), {i.product_id for i in contact.product_interests}
+            if not (wanted <= interested if rules.products_match == "all" else wanted & interested):
+                return False
         if rules.birthday_within_days is not None:
             # ponytail: server's local date; use a per-workspace timezone once workspaces have one.
             if not contact.birthday or _days_until(contact.birthday, date.today()) > rules.birthday_within_days:

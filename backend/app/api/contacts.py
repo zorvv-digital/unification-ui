@@ -15,9 +15,11 @@ from app.models.schemas import (
     ContactResponse,
     ContactUpdate,
     ImportResult,
+    ProductStatus,
 )
 from app.services.crm_service import ContactService
 from app.services.inbox_service import InboxService
+from app.services.product_service import ProductService
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
@@ -26,14 +28,19 @@ router = APIRouter(prefix="/contacts", tags=["Contacts"])
 async def list_contacts(
     q: Optional[str] = None,
     tag_ids: list[uuid.UUID] = Query(default=[]),
+    product_ids: list[uuid.UUID] = Query(default=[]),
+    product_status: Optional[ProductStatus] = None,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Lists contacts with their channels and last activity, most recently active first. `q` searches name, phone,
-    and email; `tag_ids` (repeatable) keeps contacts having any of those tags.
+    and email; `tag_ids` (repeatable) keeps contacts having any of those tags; `product_ids` (repeatable) keeps
+    contacts interested in any of those products; `product_status` is `pending`, `determined`, or `not_determined`.
     """
-    return await ContactService.list_items(db=db, workspace_id=user.workspace_id, q=q, tag_ids=tag_ids)
+    return await ContactService.list_items(
+        db=db, workspace_id=user.workspace_id, q=q, tag_ids=tag_ids, product_ids=product_ids, product_status=product_status
+    )
 
 
 @router.post("/import", response_model=ImportResult)
@@ -88,3 +95,24 @@ async def merge_contact(contact_id: uuid.UUID, data: ContactMerge, user: User = 
     from it, and it is deleted. Use it when one customer wrote in on several channels.
     """
     return await ContactService.merge(db=db, workspace_id=user.workspace_id, target_id=contact_id, source_id=data.source_contact_id)
+
+
+@router.post("/{contact_id}/product-interests/classify", response_model=ContactResponse)
+async def classify_contact(contact_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Re-analyses the contact's chats now and returns the contact with its product interests (502 when the decision
+    model is unavailable; nothing changes).
+    """
+    return await ProductService.classify(db=db, workspace_id=user.workspace_id, contact_id=contact_id)
+
+
+@router.post("/{contact_id}/product-interests/{product_id}", response_model=ContactResponse)
+async def add_product_interest(contact_id: uuid.UUID, product_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Staff adds a product interest (`source: "staff"`, never removed by the AI); repeating it changes nothing."""
+    return await ProductService.set_interest(db=db, workspace_id=user.workspace_id, contact_id=contact_id, product_id=product_id, on=True)
+
+
+@router.delete("/{contact_id}/product-interests/{product_id}", response_model=ContactResponse)
+async def remove_product_interest(contact_id: uuid.UUID, product_id: uuid.UUID, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Removes a product interest; the AI will not add this product to this contact again."""
+    return await ProductService.set_interest(db=db, workspace_id=user.workspace_id, contact_id=contact_id, product_id=product_id, on=False)

@@ -13,6 +13,7 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{Path(_db_dir) / 'test.db'}"
 os.environ["DEMO_MODE"] = "true"
 os.environ["DEMO_REPLY_DELAY_SECONDS"] = "0"
 os.environ["LLM_PROVIDER"] = "fake"
+os.environ["DECISION_PROVIDER"] = "fake"
 os.environ["GMAIL_SYNC_SECONDS"] = "0"  # tests trigger syncs themselves
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"

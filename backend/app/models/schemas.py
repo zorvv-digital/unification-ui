@@ -167,6 +167,19 @@ class TagResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+ProductStatus = Literal["pending", "determined", "not_determined"]
+
+
+class ContactProductInterest(BaseModel):
+    product_id: uuid.UUID
+    name: str
+    color: str
+    source: Literal["ai", "staff"]
+    confidence: Optional[float] = None
+    last_detected_at: UtcDatetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ContactResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -180,6 +193,9 @@ class ContactResponse(BaseModel):
     consent: Consent = "unknown"
     consent_changed_at: Optional[UtcDatetime] = None
     tags: list[TagResponse] = []
+    product_status: ProductStatus = "pending"
+    product_interests: list[ContactProductInterest] = []
+    product_classified_at: Optional[UtcDatetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -557,6 +573,51 @@ class TagUpdate(BaseModel):
     color: Optional[str] = Field(None, pattern=COLOR_PATTERN)
 
 
+def _clean_keywords(value: Optional[list[str]]) -> Optional[list[str]]:
+    if value is None:
+        return None
+    cleaned = []
+    for keyword in (k.strip() for k in value):
+        if not keyword:
+            continue
+        if len(keyword) > 40:
+            raise ValueError("keywords must be at most 40 characters")
+        if keyword.lower() not in {k.lower() for k in cleaned}:
+            cleaned.append(keyword)
+    if len(cleaned) > 20:
+        raise ValueError("at most 20 keywords")
+    return cleaned
+
+
+class ProductCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: Optional[str] = Field(None, max_length=1000)
+    keywords: list[str] = []
+    color: Optional[str] = Field(None, pattern=COLOR_PATTERN)  # picked from a palette when omitted
+
+    _keywords = field_validator("keywords")(classmethod(lambda cls, v: _clean_keywords(v)))
+
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=80)
+    description: Optional[str] = Field(None, max_length=1000)
+    keywords: Optional[list[str]] = None
+    color: Optional[str] = Field(None, pattern=COLOR_PATTERN)
+
+    _keywords = field_validator("keywords")(classmethod(lambda cls, v: _clean_keywords(v)))
+
+
+class ProductResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: Optional[str] = None
+    keywords: list[str] = []
+    color: str
+    interested_count: int = 0
+    created_at: UtcDatetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SegmentRules(BaseModel):
     """All given rules must hold; an empty rule set matches every contact."""
     tags: list[uuid.UUID] = []
@@ -566,6 +627,8 @@ class SegmentRules(BaseModel):
     active_within_days: Optional[int] = Field(None, ge=1, le=3650)
     consent: list[Consent] = []
     birthday_within_days: Optional[int] = Field(None, ge=0, le=366)
+    products: list[uuid.UUID] = []
+    products_match: Literal["any", "all"] = "any"
 
 
 class SegmentCreate(BaseModel):

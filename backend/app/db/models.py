@@ -89,6 +89,45 @@ class Tag(BaseModelMixin):
     color: Mapped[str] = mapped_column(String(7), nullable=False, default="#6b7280")
 
 
+class Product(BaseModelMixin):
+    """A product or service the business sells; the decision model tags contacts interested in it."""
+    __tablename__ = "products"
+    __table_args__ = (UniqueConstraint("workspace_id", "name_key"),)
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    keywords: Mapped[Any] = mapped_column(JSON, nullable=False, default=list)
+    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#6b7280")
+
+
+class ContactProduct(Base):
+    """
+    A contact's interest in a product. `source` is `ai` or `staff`; `dismissed` marks one staff removed,
+    which the decision model must never add back.
+    """
+    __tablename__ = "contact_products"
+
+    contact_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("contacts.id", ondelete="CASCADE"), primary_key=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(10), nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(nullable=True)
+    dismissed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    product: Mapped["Product"] = relationship("Product", lazy="joined")
+
+    # Flattened for ContactProductInterest.
+    @property
+    def name(self) -> str:
+        return self.product.name
+
+    @property
+    def color(self) -> str:
+        return self.product.color
+
+
 class Contact(BaseModelMixin):
     """A customer. `consent` is marketing consent: `opted_in`, `opted_out`, or `unknown`."""
     __tablename__ = "contacts"
@@ -105,12 +144,28 @@ class Contact(BaseModelMixin):
     consent: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     consent_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    product_classified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     tags: Mapped[list["Tag"]] = relationship("Tag", secondary=contact_tags, lazy="selectin", order_by="Tag.name")
+    product_links: Mapped[list["ContactProduct"]] = relationship(
+        "ContactProduct", lazy="selectin", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     def __init__(self, **kwargs):
-        # An initialized (empty) collection: serializing a just-created contact must not trigger an async lazy load.
+        # Initialized (empty) collections: serializing a just-created contact must not trigger an async lazy load.
         kwargs.setdefault("tags", [])
+        kwargs.setdefault("product_links", [])
         super().__init__(**kwargs)
+
+    @property
+    def product_interests(self) -> list["ContactProduct"]:
+        return sorted((link for link in self.product_links if not link.dismissed), key=lambda link: link.product.name.lower())
+
+    @property
+    def product_status(self) -> str:
+        if self.product_interests:
+            return "determined"
+        return "not_determined" if self.product_classified_at else "pending"
 
 
 class Segment(BaseModelMixin):

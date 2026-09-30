@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.db.models import (
-    Agent, AgentKnowledge, AgentVersion, Channel, Contact, Conversation, KnowledgeItem, Message, Segment, Tag, User,
+    Agent, AgentKnowledge, AgentVersion, Channel, Contact, ContactProduct, Conversation, KnowledgeItem, Message, Product,
+    Segment, Tag, User,
     Workspace, contact_tags,
 )
 from app.db.session import AsyncSessionLocal
@@ -72,7 +73,7 @@ class DemoService(BaseService):
     @classmethod
     async def reset(cls, db: AsyncSession, workspace: Workspace) -> None:
         """
-        Restores the demo workspace's contacts, tags, segments, conversations, messages, channels, agent, knowledge, and auto-reply
+        Restores the demo workspace's contacts, tags, products, segments, conversations, messages, channels, agent, knowledge, and auto-reply
         settings to the seed state.
 
         Args:
@@ -87,8 +88,10 @@ class DemoService(BaseService):
         await db.execute(delete(Message).where(Message.workspace_id == workspace.id))
         await db.execute(delete(Conversation).where(Conversation.workspace_id == workspace.id))
         await db.execute(delete(contact_tags).where(contact_tags.c.contact_id.in_(select(Contact.id).where(Contact.workspace_id == workspace.id))))
+        await db.execute(delete(ContactProduct).where(ContactProduct.contact_id.in_(select(Contact.id).where(Contact.workspace_id == workspace.id))))
         await db.execute(delete(Contact).where(Contact.workspace_id == workspace.id))
         await db.execute(delete(Tag).where(Tag.workspace_id == workspace.id))
+        await db.execute(delete(Product).where(Product.workspace_id == workspace.id))
         await db.execute(delete(Segment).where(Segment.workspace_id == workspace.id))
         # Real channels connected during a demo go too; the website widget is recreated from the seed.
         await db.execute(delete(Channel).where(Channel.workspace_id == workspace.id, Channel.adapter_type != "simulated"))
@@ -162,11 +165,23 @@ class DemoService(BaseService):
         now = datetime.now(timezone.utc)
         tags = {t["name"]: Tag(workspace_id=workspace_id, name=t["name"], name_key=t["name"].lower(), color=t["color"]) for t in seed["tags"]}
         db.add_all(tags.values())
+        products = {
+            p["name"]: Product(workspace_id=workspace_id, name=p["name"], name_key=p["name"].lower(), description=p["description"],
+                               keywords=p["keywords"], color=p["color"])
+            for p in seed["products"]
+        }
+        db.add_all(products.values())
 
         for item in seed["conversations"]:
             channel = channel_by_platform[item["platform"]]
-            fields = {k: v for k, v in item["contact"].items() if k != "tags"}
-            contact = Contact(workspace_id=workspace_id, tags=[tags[n] for n in item["contact"].get("tags", [])], **fields)
+            fields = {k: v for k, v in item["contact"].items() if k not in ("tags", "products")}
+            contact = Contact(
+                workspace_id=workspace_id, tags=[tags[n] for n in item["contact"].get("tags", [])], **fields,
+                # Seeded as already analysed, so the demo needs no decision model at startup.
+                product_classified_at=now,
+                product_links=[ContactProduct(product=products[n], source="ai", confidence=0.9, last_detected_at=now)
+                               for n in item["contact"].get("products", [])],
+            )
             conversation = Conversation(
                 workspace_id=workspace_id,
                 channel=channel,

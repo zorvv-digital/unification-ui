@@ -24,6 +24,9 @@
         "tags": [
           "VIP",
           "Regular"
+        ],
+        "products": [
+          "Haircut"
         ]
       },
       "messages": [
@@ -62,6 +65,9 @@
         "phone": "+91 98111 22233",
         "tags": [
           "Bridal"
+        ],
+        "products": [
+          "Bridal makeup"
         ]
       },
       "messages": [
@@ -84,6 +90,9 @@
         "email": "sarah@designs.com",
         "tags": [
           "Regular"
+        ],
+        "products": [
+          "Hair colouring"
         ]
       },
       "messages": [
@@ -152,7 +161,10 @@
       "customer_id": "fb_diana_2002",
       "contact": {
         "name": "Diana",
-        "avatar": "https://i.pravatar.cc/150?u=diana"
+        "avatar": "https://i.pravatar.cc/150?u=diana",
+        "products": [
+          "Facial"
+        ]
       },
       "status": "closed",
       "messages": [
@@ -181,6 +193,9 @@
         "tags": [
           "Bridal",
           "VIP"
+        ],
+        "products": [
+          "Bridal makeup"
         ]
       },
       "messages": [
@@ -199,7 +214,10 @@
       "contact": {
         "name": "Vikram Shah",
         "avatar": "https://i.pravatar.cc/150?u=vikram",
-        "email": "vikram@brightlabs.example.com"
+        "email": "vikram@brightlabs.example.com",
+        "products": [
+          "Massage"
+        ]
       },
       "messages": [
         {
@@ -223,7 +241,10 @@
       "contact": {
         "name": "Neha Kapoor",
         "avatar": "https://i.pravatar.cc/150?u=neha",
-        "email": "neha.kapoor@example.com"
+        "email": "neha.kapoor@example.com",
+        "products": [
+          "Facial"
+        ]
       },
       "messages": [
         {
@@ -315,6 +336,58 @@
     {
       "name": "Bridal",
       "color": "#ec4899"
+    }
+  ],
+  "products": [
+    {
+      "name": "Haircut",
+      "description": "Haircuts and beard trims for men and women",
+      "keywords": [
+        "haircut",
+        "hair cut",
+        "trim",
+        "beard"
+      ],
+      "color": "#0ea5e9"
+    },
+    {
+      "name": "Hair colouring",
+      "description": "Balayage, highlights and global hair colour",
+      "keywords": [
+        "balayage",
+        "highlights",
+        "hair color",
+        "hair colour"
+      ],
+      "color": "#8b5cf6"
+    },
+    {
+      "name": "Bridal makeup",
+      "description": "Bridal hair and makeup packages and trials",
+      "keywords": [
+        "bridal",
+        "wedding",
+        "bride"
+      ],
+      "color": "#ec4899"
+    },
+    {
+      "name": "Facial",
+      "description": "Facials and skin treatments",
+      "keywords": [
+        "facial",
+        "skin"
+      ],
+      "color": "#10b981"
+    },
+    {
+      "name": "Massage",
+      "description": "Spa, chair and on-site massages",
+      "keywords": [
+        "massage",
+        "spa"
+      ],
+      "color": "#f59e0b"
     }
   ]
 }

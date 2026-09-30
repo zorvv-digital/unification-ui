@@ -1,9 +1,10 @@
 # API contract: product tags and customer product interest
 
-**Status: contract only. The backend is not built yet**, so these endpoints return `404` until it ships.
+**Status: implemented** in the backend (`add-product-interest`). The demo workspace has seeded salon products and
+tagged customers.
 **Revised 2026-09-30:** decisions are made per contact, not per conversation. The conversation-level
-`product_interest` field and `/conversations/{id}/product-interest` endpoints were removed; see §2. Build the UI
-against this document and a mock (see "Working before the backend exists"). The field names and shapes below are
+`product_interest` field and `/conversations/{id}/product-interest` endpoints were removed; see §2. The UI
+can now run against the real backend. The field names and shapes below are
 what the backend will return.
 
 ## What the feature does
@@ -119,7 +120,7 @@ Behavior the UI can rely on:
   both. An interest is removed only by staff (`DELETE`) or when the product is deleted.
 - **Staff decisions stick.** A staff-added interest is never removed by the AI, and a staff-removed one is never
   re-added.
-- **Confidence.** The AI adds a product only at a confidence of 0.6 or higher.
+- **Confidence.** The AI adds a product only at a confidence of 0.5 or higher (configurable on the server).
 - **New or edited products.** Creating or editing a product re-analyses the workspace's contacts in the background,
   so existing chats get tagged too. Expect `interested_count` and the contacts to update over the next seconds.
 
