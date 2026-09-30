@@ -1,6 +1,8 @@
 # API contract: product tags and customer product interest
 
-**Status: contract only. The backend is not built yet**, so these endpoints return `404` until it ships. Build the UI
+**Status: contract only. The backend is not built yet**, so these endpoints return `404` until it ships.
+**Revised 2026-09-30:** decisions are made per contact, not per conversation. The conversation-level
+`product_interest` field and `/conversations/{id}/product-interest` endpoints were removed; see §2. Build the UI
 against this document and a mock (see "Working before the backend exists"). The field names and shapes below are
 what the backend will return.
 
@@ -8,10 +10,10 @@ what the backend will return.
 
 1. Staff create **product tags**: the products or services the business sells (e.g. *Sunscreen*, *Face wash*,
    *Bridal makeup*). A short description and keywords help the AI recognize them.
-2. When a customer chats on any channel, the backend reads the conversation and decides which product(s) the customer
-   is asking about. It uses an AI decision model (Laya).
-3. The customer is then **tagged as interested** in those products. If the chat is not about any product, or the AI
-   is unsure, the conversation is **not determined**.
+2. When a customer chats on any channel, the backend reads **all of that customer's chats** and decides which
+   product(s) they are interested in. It uses an AI decision model (Laya).
+3. The customer (contact) is then **tagged as interested** in those products. If their chats are not about any
+   product, or the AI is unsure, the contact is **not determined**.
 4. Staff can correct the result, and staff choices are never overwritten by the AI.
 5. Contacts and segments can be filtered by product interest, for example "everyone interested in Sunscreen" for a
    campaign.
@@ -69,98 +71,70 @@ Response:
 
 ---
 
-## 2. Product interest on a conversation
+## 2. Product interest on a contact (the customer tag)
 
-Each conversation carries the AI's (or staff's) decision about which products it is about.
-
-### Types
-
-```ts
-export type InterestStatus =
-  | 'pending'         // no customer message yet, or classification is running
-  | 'determined'      // one or more products found
-  | 'not_determined'; // not about a known product, or the AI is not confident enough
-
-export interface ProductMatch {
-  product_id: string;
-  name: string;
-  color: string;
-  confidence: number | null; // 0–1 from the AI; null when set by staff
-}
-
-export interface ProductInterest {
-  status: InterestStatus;
-  products: ProductMatch[];   // empty unless status is 'determined'
-  source: 'ai' | 'staff' | null;
-  classified_at: string | null;
-}
-```
-
-`ConversationResponse` (from `GET /conversations` and the `conversation.updated` SSE event) gains one field:
-```ts
-product_interest: ProductInterest;
-```
-
-### Endpoints
-
-| Method and path | Body | Success | Errors |
-|---|---|---|---|
-| `GET /conversations/{id}/product-interest` | none | `200` with `ProductInterest` | `404` |
-| `PUT /conversations/{id}/product-interest` | `{product_ids: string[]}` | `200` with `ProductInterest` (`source: "staff"`). An empty list means staff marked it `not_determined` | `404`, and `422` for unknown product ids |
-| `POST /conversations/{id}/product-interest/classify` | none | `200` with `ProductInterest`: runs the AI now on the latest messages | `404`, `409` when staff set it (clear it with `DELETE` first), `502` when the AI is unavailable |
-| `DELETE /conversations/{id}/product-interest` | none | `200` with `ProductInterest`: removes the staff override and goes back to AI results | `404` |
-
-Behavior the UI can rely on:
-- **Automatic.** After each new customer message, the backend classifies in the background. The UI learns the result
-  from the `conversation.updated` SSE event, with no polling. Show `pending` as a subtle "Detecting…" state.
-- **Staff override wins.** While `source` is `"staff"`, the AI never changes the result.
-- **Confidence.** The AI marks a product only above a confidence threshold of 0.6. Below that, the result is
-  `not_determined`.
-
-Example `conversation.updated` payload (other fields as today):
-```json
-{ "id": "c1…", "platform": "whatsapp", "contact": { "id": "k9…", "name": "Priya", "…": "…" },
-  "product_interest": { "status": "determined", "source": "ai", "classified_at": "2026-09-30T10:16:02Z",
-    "products": [ { "product_id": "6f1c…", "name": "Sunscreen", "color": "#f59e0b", "confidence": 0.91 } ] } }
-```
-
----
-
-## 3. Product interest on a contact (the customer tag)
-
-A contact's interests are all products found across all their conversations. This is "this customer is interested in
-Sunscreen".
+The decision is made **per contact**, from that customer's messages across **all** their chats (WhatsApp,
+Instagram, Messenger, Gmail and website). The result is "this customer is interested in Sunscreen".
 
 ### Types
 
 ```ts
+export type ProductStatus =
+  | 'pending'         // not analysed yet (no customer messages, or no products defined yet)
+  | 'determined'      // interested in one or more products
+  | 'not_determined'; // analysed, but not about any known product, or the AI was not confident enough
+
 export interface ContactProductInterest {
   product_id: string;
   name: string;
   color: string;
-  source: 'ai' | 'staff';
-  confidence: number | null;
-  last_detected_at: string;   // most recent conversation that matched
+  source: 'ai' | 'staff';     // 'staff' = added by a person; the AI never removes it
+  confidence: number | null;  // 0–1 from the AI; null when added by staff
+  last_detected_at: string;   // when the AI last saw it in the chats (or when staff added it)
 }
 ```
 
-`ContactResponse` (the `contact` inside conversations, `GET /contacts`, `GET /contacts/{id}`) gains:
+`ContactResponse` gains three fields. This covers the `contact` inside conversations and in the
+`conversation.updated` SSE event, `GET /contacts` and `GET /contacts/{id}`:
 ```ts
-product_interests: ContactProductInterest[]; // empty = no product determined yet
+product_status: ProductStatus;
+product_interests: ContactProductInterest[]; // empty unless product_status is 'determined'
+product_classified_at: string | null;        // last time the AI analysed this contact
 ```
 
 ### Endpoints
 
 | Method and path | Body | Success | Errors |
 |---|---|---|---|
+| `POST /contacts/{id}/product-interests/classify` | none | `200` with `ContactResponse`: re-runs the AI on the contact's chats now | `404`, `502` when the AI is unavailable |
+| `POST /contacts/{id}/product-interests/{product_id}` | none | `200` with `ContactResponse`: staff adds an interest (`source: "staff"`); repeating it changes nothing | `404` for an unknown contact or product |
+| `DELETE /contacts/{id}/product-interests/{product_id}` | none | `200` with `ContactResponse`: removes the interest, and the AI will not add this product to this contact again | `404` |
 | `GET /contacts?product_ids=<id>&product_ids=<id>` | none | contacts interested in **any** of these products (combines with the existing `q` and `tag_ids`) | none |
-| `GET /contacts?product_status=not_determined` | none | contacts with no product interest yet | `422` for another value |
-| `POST /contacts/{id}/product-interests/{product_id}` | none | `200` with `ContactResponse`: staff adds an interest (`source: "staff"`); repeating it changes nothing | `404` |
-| `DELETE /contacts/{id}/product-interests/{product_id}` | none | `200` with `ContactResponse`: removes it, and the AI will not re-add this product for this contact | `404` |
+| `GET /contacts?product_status=not_determined` | none | contacts by status (`pending`, `determined` or `not_determined`) | `422` for another value |
+
+Behavior the UI can rely on:
+- **Automatic.** After each new customer message on any channel, the backend re-analyses that contact in the
+  background. The UI learns the result from the `conversation.updated` SSE event, with no polling.
+- **Interests accumulate.** A customer who asked about Sunscreen last week and about Face wash today is interested in
+  both. An interest is removed only by staff (`DELETE`) or when the product is deleted.
+- **Staff decisions stick.** A staff-added interest is never removed by the AI, and a staff-removed one is never
+  re-added.
+- **Confidence.** The AI adds a product only at a confidence of 0.6 or higher.
+- **New or edited products.** Creating or editing a product re-analyses the workspace's contacts in the background,
+  so existing chats get tagged too. Expect `interested_count` and the contacts to update over the next seconds.
+
+Example `contact` (inside a conversation or `GET /contacts/{id}`), with other fields as today:
+```json
+{ "id": "k9…", "name": "Priya", "tags": [],
+  "product_status": "determined", "product_classified_at": "2026-09-30T10:16:02Z",
+  "product_interests": [
+    { "product_id": "6f1c…", "name": "Sunscreen", "color": "#f59e0b", "source": "ai", "confidence": 0.91,
+      "last_detected_at": "2026-09-30T10:16:02Z" } ] }
+```
 
 ---
 
-## 4. Segments
+## 3. Segments
 
 Segment rules (`POST /segments/preview`, `POST /segments`, `PATCH /segments/{id}`) gain two optional fields:
 ```ts
@@ -171,25 +145,26 @@ Saved segments stay dynamic, so a customer who later asks about Sunscreen joins 
 
 ---
 
-## 5. Suggested screens
+## 4. Suggested screens
 
 - **Products** (new page or a tab on Contacts): a list with a color chip, name, keyword count and
   `interested_count`. Create and edit in a modal with name, description, keywords (chip input) and color. Delete with
   confirmation ("Removes it from N customers").
-- **Inbox contact panel:** a "Interested in" row of product chips, plus a "Detecting…" or "Not determined" state.
+- **Inbox contact panel:** an "Interested in" row of product chips (staff-added ones marked), or a "Not analysed yet"
+  / "Not determined" state.
   - Add or remove a product with the same UI as tags.
-  - **Re-detect** calls `classify`, and **Reset to AI** calls `DELETE` when staff overrode the result.
-- **Conversation list** (optional): small product chips under the preview.
+  - **Re-detect** calls `classify`.
+- **Conversation list** (optional): small product chips from `contact.product_interests` under the preview.
 - **Contacts page:** a product filter next to the tag filter, including "Not determined".
 - **Segment builder:** an "Interested in products" rule, like "Has tags".
 
 Keep the existing theme (brand CSS tokens, gray-900 primary buttons), as in the Contacts page.
 
-## 6. Working before the backend exists
+## 5. Working before the backend exists
 
 - Add `src/services/productApi.ts` in the style of `crmApi.ts`. Until the backend lands, back it with an in-memory
   mock of the shapes above, for example when `VITE_PRODUCTS_MOCK=true`.
-- Treat `product_interest` and `product_interests` as optional in the existing types (`?:`), so the current backend
-  responses keep working until the fields exist.
+- Treat `product_status`, `product_interests` and `product_classified_at` as optional in the existing types (`?:`), so
+  the current backend responses keep working until the fields exist.
 - The backend will follow this contract exactly. If something is missing or awkward for the UI, raise it before the
   backend is built, and this document will be updated.
