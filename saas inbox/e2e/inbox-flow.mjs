@@ -532,6 +532,85 @@ await step('WC6. the widget refuses unlisted websites', async () => {
   assert.equal(res.status, 403);
 });
 
+// --- CRM: contacts, tags, segments (add-crm-tags) ---
+// The inbox renders the contact panel twice (desktop column + mobile drawer); the desktop one comes first.
+const panel = label => page.getByLabel(label, { exact: true }).first();
+const contactsByName = async () => Object.fromEntries((await api('/contacts', {}, token)).map(c => [c.name, c]));
+
+await step('C1. tag and edit a contact from the inbox', async () => {
+  await page.goto(`${UI}/inbox`);
+  await page.getByText('Rahul Kumar').first().click();
+  await panel('Remove tag VIP').waitFor();
+  await panel('Add tag').click();
+  await panel('New tag name').fill('Birthday club');
+  await panel('Create tag').click();
+  await panel('Remove tag Birthday club').waitFor({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+  await panel('Birthday').fill('1990-03-14');
+  await panel('Marketing consent').selectOption('opted_in');
+  await panel('Notes').fill('Prefers evening slots');
+  await page.getByRole('button', { name: 'Save contact' }).first().click();
+  await page.getByText('Marketing: Opted in').first().waitFor({ timeout: 5000 });
+  await page.getByText('Prefers evening slots').first().waitFor();
+  const rahul = (await contactsByName())['Rahul Kumar'];
+  assert.deepEqual([rahul.birthday, rahul.consent], ['1990-03-14', 'opted_in']);
+  await page.screenshot({ path: SHOTS + 'C1-contact-panel.png' });
+});
+
+await step('C2. the Contacts page searches and filters by tag', async () => {
+  await page.locator('aside').getByRole('button', { name: 'Contacts' }).click();
+  await page.waitForURL('**/contacts');
+  await page.getByLabel('Search contacts').fill('rahul');
+  await page.locator('tbody tr').filter({ hasText: 'Rahul Kumar' }).waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1);
+  await page.getByLabel('Search contacts').fill('');
+  await page.getByLabel('Filter by tag').getByRole('button', { name: 'Bridal' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 2);
+  await page.locator('tbody tr').filter({ hasText: 'Ananya Rao' }).waitFor();
+  await page.locator('tbody tr').filter({ hasText: 'Priya Singh' }).waitFor();
+  await page.getByLabel('Filter by tag').getByRole('button', { name: 'Bridal' }).click();
+});
+
+await step('C3. CSV import creates contacts and reports skipped rows', async () => {
+  const csv = 'name,phone,email,birthday,tags\nDeepa Nair,+91 99000 44444,deepa@example.com,1991-05-20,VIP;Bridal\nBad Date,,bad@example.com,1991-02-30,\nRahul Kumar,+91 98765 43210,,,Regular';
+  await page.getByLabel('Import CSV').setInputFiles({ name: 'contacts.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.getByRole('status').getByText('Imported: 1 created, 1 updated, 1 skipped').waitFor();
+  await page.getByText('Row 3: Invalid birthday').waitFor();
+  await page.locator('tbody tr').filter({ hasText: 'Deepa Nair' }).waitFor();
+  await page.screenshot({ path: SHOTS + 'C3-contacts-import.png' });
+});
+
+await step('C4. merging the same customer from two channels', async () => {
+  await page.goto(`${UI}/inbox`);
+  await page.getByText('Sarah').first().click();
+  await page.getByRole('button', { name: 'Merge', exact: true }).first().click();
+  await page.getByLabel('Search contacts to merge').fill('Mark');
+  page.once('dialog', d => d.accept());
+  const merged = page.waitForResponse(res => res.url().endsWith('/merge') && res.request().method() === 'POST');
+  const reloaded = page.waitForEvent('load'); // the inbox reloads after a merge
+  await page.getByLabel('Merge Mark Smith').click();
+  assert.equal((await merged).status(), 200);
+  await reloaded;
+  const contacts = await contactsByName();
+  assert.equal(contacts['Mark Smith'], undefined);
+  const sarah = await api(`/contacts/${contacts['Sarah'].id}`, {}, token);
+  assert.equal(sarah.conversation_ids.length, 2);
+});
+
+await step('C5. a segment previews its members live and is saved', async () => {
+  await page.goto(`${UI}/contacts`);
+  await page.getByRole('tab', { name: 'segments' }).click();
+  await page.getByLabel('Has VIP').click();
+  const expected = (await api('/segments/preview', { method: 'POST', body: JSON.stringify({ rules: { tags: [(await api('/tags', {}, token)).find(t => t.name === 'VIP').id] } }) }, token)).count;
+  await page.waitForFunction(n => document.querySelector('[aria-label="Segment count"]')?.textContent === String(n), expected);
+  await page.getByLabel('Segment name').fill('VIP customers');
+  await page.getByRole('button', { name: 'Save segment' }).click();
+  await page.getByRole('button', { name: 'VIP customers', exact: true }).waitFor();
+  const [segment] = await api('/segments', {}, token);
+  assert.deepEqual([segment.name, segment.count], ['VIP customers', expected]);
+  await page.screenshot({ path: SHOTS + 'C5-segments.png' });
+});
+
 // --- AI playground (add-ai-agents) ---
 const chat = async text => {
   const before = await page.locator('.bg-white.rounded-tl-none').filter({ hasText: /\S/ }).count();

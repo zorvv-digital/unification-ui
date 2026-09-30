@@ -513,3 +513,80 @@ curl -X POST -H "$O" -H "X-Visitor-Token: $TOKEN" -H "Content-Type: application/
 | Limits | content over 2,000 characters → `422`; the 21st message within a minute from one visitor → `429` |
 | Webhook | `POST /webhooks/{WEB_ID}` → `401` (visitors only use the widget API) |
 
+
+---
+
+## 15. Contacts, tags, and segments
+
+Everything here is under the **Contacts** tag. Stay authorized as the demo user. The demo seeds three tags: **VIP**,
+**Regular** and **Bridal**. Rahul Kumar has VIP and Regular.
+
+### 15.1 Contact profile
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| List | `GET /contacts` | none | each contact has `platforms`, `tags` and `last_activity_at`, most recently active first. Copy Rahul's `id` (RAHUL_ID) |
+| Search | `GET /contacts?q=rahul` | none | only Rahul; `q` matches name, phone (digits, so `98765 43210` works) and email, ignoring case |
+| Edit | `PATCH /contacts/{RAHUL_ID}` | `{"birthday": "1990-03-14", "anniversary": "2018-11-02", "notes": "Prefers evening slots"}` | `200` with the new values |
+| Consent | same | `{"consent": "opted_in"}` | `consent_changed_at` is set; later edits that leave consent alone keep that time |
+| Bad values | same | `{"email": "not-an-email"}`, `{"birthday": "1990-02-30"}` or `{"consent": "maybe"}` | `422`, and the contact is unchanged |
+| Isolation | same, as the second business | `{"notes": "x"}` | `404` |
+
+### 15.2 Tags
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| List | `GET /tags` | none | the workspace's tags sorted by name, each with a `color` |
+| Create | `POST /tags` | `{"name": "Birthday club", "color": "#6366f1"}` | `201`. Copy the `id` (TAG_ID) |
+| Duplicate | same | `{"name": " vip "}` | `409`: names are unique ignoring case and spaces |
+| Bad color | same | `{"name": "Red", "color": "red"}` | `422` (use `#rrggbb`) |
+| Rename | `PATCH /tags/{TAG_ID}` | `{"name": "Regular"}` | `409` (taken); any other name → `200` |
+| Assign | `POST /contacts/{RAHUL_ID}/tags/{TAG_ID}` | none | `200` with the contact's tags. Repeating it changes nothing. Open inboxes update live (`conversation.updated`) |
+| Remove | `DELETE /contacts/{RAHUL_ID}/tags/{TAG_ID}` | none | `200`, tag gone from the contact |
+| Filter | `GET /contacts?tag_ids={id}&tag_ids={id2}` | none | contacts having **any** of the tags |
+| Delete | `DELETE /tags/{TAG_ID}` | none | `204`; it is removed from every contact |
+
+### 15.3 Merge
+The same customer who wrote on two channels shows up as two contacts. In the demo these are **Sarah** and **Mark Smith**.
+`POST /contacts/{SARAH_ID}/merge` with `{"source_contact_id": "<MARK_ID>"}` → `200`:
+- Mark's conversations and tags move to Sarah (`GET /contacts/{SARAH_ID}` shows two `conversation_ids`).
+- Sarah's empty fields are filled from Mark's; her own values are kept.
+- Mark is deleted (`GET /contacts/{MARK_ID}` → `404`).
+
+Merging a contact into itself → `400`; an unknown source → `404`.
+
+### 15.4 CSV import
+`POST /contacts/import` with the CSV as text:
+
+```json
+{"csv": "name,phone,email,birthday,tags\nDeepa Nair,+91 99000 44444,deepa@example.com,1991-05-20,VIP;Bridal\nBad Date,,bad@example.com,1991-02-30,\nRahul Kumar,+91 98765 43210,,,Regular"}
+```
+
+Expect `{"created": 1, "updated": 1, "skipped": [{"row": 3, "reason": "Invalid birthday ..."}]}`. Row numbers count the
+header as row 1. The columns are `name, phone, email, birthday, anniversary, tags`: dates are `YYYY-MM-DD`, and tags are
+separated by `;`. A row updates the existing contact with the same phone digits or email, and new tag names are created.
+A CSV with none of the known columns gives `422`.
+
+### 15.5 Segments
+A segment is a saved set of rules. Its members are worked out each time it is used, so a contact tagged later joins it
+automatically. Every rule given must match:
+
+| Rule | Meaning |
+|---|---|
+| `tags` + `tags_match` | has `any` (default) or `all` of these tag ids |
+| `exclude_tags` | has none of these |
+| `platforms` | has a conversation on one of these (`whatsapp`, `instagram`, `messenger`, `gmail`, `website`) |
+| `active_within_days` | last message within N days |
+| `consent` | one of `opted_in`, `opted_out`, `unknown` |
+| `birthday_within_days` | birthday in the next N days, including across New Year |
+
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Preview | `POST /segments/preview` | `{"rules": {"tags": ["<VIP id>"]}}` | `count` and `members`, nothing saved |
+| Bad rule | same | `{"rules": {"platforms": ["fax"]}}` | `422` |
+| Save | `POST /segments` | `{"name": "VIP customers", "rules": {"tags": ["<VIP id>"]}}` | `201`. Copy the `id` (SEG_ID) |
+| Duplicate | same | `{"name": "vip customers", "rules": {}}` | `409` |
+| Members | `GET /segments/{SEG_ID}/members?limit=20&offset=0` | none | the current `count` and a page of members. Tag another contact VIP and call it again: the count goes up |
+| List | `GET /segments` | none | saved segments with current counts |
+| Edit | `PATCH /segments/{SEG_ID}` | `{"name": "Top customers"}` | renamed, rules kept |
+| Delete | `DELETE /segments/{SEG_ID}` | none | `204` |
+
+**Demo reset** (§8) restores the seeded tags and removes your segments and any tags you added.

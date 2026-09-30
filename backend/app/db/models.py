@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, Any
-from datetime import datetime, timedelta, timezone
-from sqlalchemy import DateTime, String, Text, Boolean, Integer, ForeignKey, Uuid, JSON, UniqueConstraint, func
+from datetime import date, datetime, timedelta, timezone
+from sqlalchemy import Column, Date, DateTime, String, Table, Text, Boolean, Integer, ForeignKey, Uuid, JSON, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -69,7 +69,28 @@ class Channel(BaseModelMixin):
     ai_agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
 
 
+# Rows are deleted explicitly (tag delete, merge, demo reset): SQLite runs without enforced foreign keys.
+contact_tags = Table(
+    "contact_tags",
+    Base.metadata,
+    Column("contact_id", Uuid(as_uuid=True), ForeignKey("contacts.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Uuid(as_uuid=True), ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class Tag(BaseModelMixin):
+    """A workspace label for contacts. `name_key` (lowercased name) makes names unique ignoring case."""
+    __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("workspace_id", "name_key"),)
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    color: Mapped[str] = mapped_column(String(7), nullable=False, default="#6b7280")
+
+
 class Contact(BaseModelMixin):
+    """A customer. `consent` is marketing consent: `opted_in`, `opted_out`, or `unknown`."""
     __tablename__ = "contacts"
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
@@ -78,6 +99,29 @@ class Contact(BaseModelMixin):
     avatar: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    birthday: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    anniversary: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    consent: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
+    consent_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tags: Mapped[list["Tag"]] = relationship("Tag", secondary=contact_tags, lazy="selectin", order_by="Tag.name")
+
+    def __init__(self, **kwargs):
+        # An initialized (empty) collection: serializing a just-created contact must not trigger an async lazy load.
+        kwargs.setdefault("tags", [])
+        super().__init__(**kwargs)
+
+
+class Segment(BaseModelMixin):
+    """A saved, dynamic group of contacts; `rules` follow `SegmentRules` and are evaluated whenever used."""
+    __tablename__ = "segments"
+    __table_args__ = (UniqueConstraint("workspace_id", "name_key"),)
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    rules: Mapped[Any] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class Conversation(BaseModelMixin):

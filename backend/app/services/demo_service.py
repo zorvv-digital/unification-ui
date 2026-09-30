@@ -10,7 +10,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.db.models import Agent, AgentKnowledge, AgentVersion, Channel, Contact, Conversation, KnowledgeItem, Message, User, Workspace
+from app.db.models import (
+    Agent, AgentKnowledge, AgentVersion, Channel, Contact, Conversation, KnowledgeItem, Message, Segment, Tag, User,
+    Workspace, contact_tags,
+)
 from app.db.session import AsyncSessionLocal
 from app.services.agent_service import AgentService
 from app.services.auth_service import AuthService
@@ -69,7 +72,7 @@ class DemoService(BaseService):
     @classmethod
     async def reset(cls, db: AsyncSession, workspace: Workspace) -> None:
         """
-        Restores the demo workspace's contacts, conversations, messages, channels, agent, knowledge, and auto-reply
+        Restores the demo workspace's contacts, tags, segments, conversations, messages, channels, agent, knowledge, and auto-reply
         settings to the seed state.
 
         Args:
@@ -83,7 +86,10 @@ class DemoService(BaseService):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the demo workspace can be reset")
         await db.execute(delete(Message).where(Message.workspace_id == workspace.id))
         await db.execute(delete(Conversation).where(Conversation.workspace_id == workspace.id))
+        await db.execute(delete(contact_tags).where(contact_tags.c.contact_id.in_(select(Contact.id).where(Contact.workspace_id == workspace.id))))
         await db.execute(delete(Contact).where(Contact.workspace_id == workspace.id))
+        await db.execute(delete(Tag).where(Tag.workspace_id == workspace.id))
+        await db.execute(delete(Segment).where(Segment.workspace_id == workspace.id))
         # Real channels connected during a demo go too; the website widget is recreated from the seed.
         await db.execute(delete(Channel).where(Channel.workspace_id == workspace.id, Channel.adapter_type != "simulated"))
         agent_ids = await db.execute(select(Agent.id).where(Agent.workspace_id == workspace.id))
@@ -154,10 +160,13 @@ class DemoService(BaseService):
         db.add(channel_by_platform["website"])
         await db.flush()
         now = datetime.now(timezone.utc)
+        tags = {t["name"]: Tag(workspace_id=workspace_id, name=t["name"], name_key=t["name"].lower(), color=t["color"]) for t in seed["tags"]}
+        db.add_all(tags.values())
 
         for item in seed["conversations"]:
             channel = channel_by_platform[item["platform"]]
-            contact = Contact(workspace_id=workspace_id, **item["contact"])
+            fields = {k: v for k, v in item["contact"].items() if k != "tags"}
+            contact = Contact(workspace_id=workspace_id, tags=[tags[n] for n in item["contact"].get("tags", [])], **fields)
             conversation = Conversation(
                 workspace_id=workspace_id,
                 channel=channel,

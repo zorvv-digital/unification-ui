@@ -1,5 +1,5 @@
 import type { MessageService } from './MessageService';
-import type { Contact, Conversation, Message, Platform } from '../../types/messaging';
+import type { Consent, Contact, ContactTag, Conversation, Message, Platform } from '../../types/messaging';
 
 const TOKEN_KEY = 'unification.token';
 
@@ -9,13 +9,18 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 // --- API shapes (snake_case, ISO timestamps) ---
 
-interface ApiContact {
+export interface ApiContact {
   id: string;
   name: string;
   username: string | null;
   avatar: string | null;
   phone: string | null;
   email: string | null;
+  birthday?: string | null;
+  anniversary?: string | null;
+  notes?: string | null;
+  consent?: Consent;
+  tags?: ContactTag[];
 }
 
 export interface ApiConversation {
@@ -61,6 +66,11 @@ export const toContact = (c: ApiContact): Contact => ({
   avatar: c.avatar ?? undefined,
   phone: c.phone ?? undefined,
   email: c.email ?? undefined,
+  birthday: c.birthday ?? undefined,
+  anniversary: c.anniversary ?? undefined,
+  notes: c.notes ?? undefined,
+  consent: c.consent,
+  tags: c.tags ?? [],
 });
 
 export const toConversation = (c: ApiConversation): Conversation => ({

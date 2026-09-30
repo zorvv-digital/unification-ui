@@ -76,9 +76,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           <div>
             <div className="text-xs font-medium text-[var(--color-brand-text-secondary)] uppercase tracking-wider mb-2 px-2">Main</div>
             <nav className="flex flex-col gap-0.5">
-              <SidebarItem icon={<Inbox size={18} />} label="Inbox" active badge="12" />
+              <SidebarItem icon={<Inbox size={18} />} label="Inbox" active={location.pathname === '/inbox'} badge="12" onClick={() => navigate('/inbox')} />
               <SidebarItem icon={<MessageSquare size={18} />} label="Messages" />
-              <SidebarItem icon={<Users size={18} />} label="Contacts" />
+              <SidebarItem icon={<Users size={18} />} label="Contacts" active={location.pathname === '/contacts'} onClick={() => navigate('/contacts')} />
             </nav>
           </div>
 

@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated, Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 
 # Extended by later channel changes (gmail, website, ...).
-Platform = Literal["whatsapp", "instagram", "messenger"]
+Platform = Literal["whatsapp", "instagram", "messenger", "gmail", "website"]
 ConversationStatus = Literal["open", "closed"]
 ConversationMode = Literal["ai", "human"]
 MessageType = Literal["text", "image", "video", "audio", "file", "emoji", "template"]
@@ -156,6 +156,17 @@ class WebhookResult(BaseModel):
 # Inbox
 # ==========================================
 
+Consent = Literal["opted_in", "opted_out", "unknown"]
+COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
+
+
+class TagResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    color: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ContactResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -163,6 +174,12 @@ class ContactResponse(BaseModel):
     avatar: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    birthday: Optional[date] = None
+    anniversary: Optional[date] = None
+    notes: Optional[str] = None
+    consent: Consent = "unknown"
+    consent_changed_at: Optional[UtcDatetime] = None
+    tags: list[TagResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -437,3 +454,92 @@ class LeadSubmit(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[str] = Field(None, pattern=EMAIL_PATTERN, max_length=255)
     phone: Optional[str] = Field(None, min_length=3, max_length=50)
+
+
+# ==========================================
+# CRM: contacts, tags, segments
+# ==========================================
+
+class ContactUpdate(BaseModel):
+    """Profile fields to change; omitted fields stay as they are, `null` clears an optional field."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[str] = Field(None, pattern=EMAIL_PATTERN, max_length=255)
+    birthday: Optional[date] = None
+    anniversary: Optional[date] = None
+    notes: Optional[str] = Field(None, max_length=5000)
+    consent: Optional[Consent] = None
+
+
+class ContactListItem(ContactResponse):
+    platforms: list[str]
+    last_activity_at: Optional[UtcDatetime] = None
+
+
+class ContactMerge(BaseModel):
+    source_contact_id: uuid.UUID
+
+
+class ContactImport(BaseModel):
+    """CSV text with a header row: name, phone, email, birthday, anniversary (YYYY-MM-DD), tags (separated by `;`)."""
+    csv: str = Field(min_length=1, max_length=5_000_000)
+
+
+class ImportSkip(BaseModel):
+    row: int
+    reason: str
+
+
+class ImportResult(BaseModel):
+    created: int
+    updated: int
+    skipped: list[ImportSkip]
+
+
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    color: str = Field("#6b7280", pattern=COLOR_PATTERN)
+
+
+class TagUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
+    color: Optional[str] = Field(None, pattern=COLOR_PATTERN)
+
+
+class SegmentRules(BaseModel):
+    """All given rules must hold; an empty rule set matches every contact."""
+    tags: list[uuid.UUID] = []
+    tags_match: Literal["any", "all"] = "any"
+    exclude_tags: list[uuid.UUID] = []
+    platforms: list[Platform] = []
+    active_within_days: Optional[int] = Field(None, ge=1, le=3650)
+    consent: list[Consent] = []
+    birthday_within_days: Optional[int] = Field(None, ge=0, le=366)
+
+
+class SegmentCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    rules: SegmentRules = SegmentRules()
+
+
+class SegmentUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    rules: Optional[SegmentRules] = None
+
+
+class SegmentResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    rules: SegmentRules
+    count: int
+
+
+class SegmentPreview(BaseModel):
+    rules: SegmentRules = SegmentRules()
+    limit: int = Field(20, ge=1, le=200)
+    offset: int = Field(0, ge=0)
+
+
+class SegmentMembers(BaseModel):
+    count: int
+    members: list[ContactListItem]

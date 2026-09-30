@@ -2,7 +2,7 @@
 
 How to run the platform locally and walk through the demo as a business user would.
 The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend pointed at the
-mock Meta and Google APIs it runs, see §14).
+mock Meta and Google APIs it runs, see §15).
 
 ## 0. Run both apps
 
@@ -204,7 +204,35 @@ Click **Website chat** in the sidebar (under *Channels*).
    The conversation in the Inbox is renamed live and the contact panel shows the phone.
 5. **Returning visitor.** Reload the demo page and open the chat: the earlier messages are still there.
 
-## 14. Automated E2E
+## 14. Contacts, tags and segments
+
+The demo has three tags: **VIP**, **Regular** and **Bridal**.
+
+1. **Tag a customer from the inbox.** Open **Rahul Kumar**. The contact panel on the right shows his tags (VIP, Regular).
+   Click **Add tag**, type `Birthday club`, and click **Create tag**. The new tag appears on Rahul right away (click the
+   **×** on a tag to remove it).
+2. **Edit the profile.** Click **Edit** in the contact panel. Set a **Birthday**, set **Marketing consent** to *Opted in*,
+   add **Notes** (e.g. *Prefers evening slots*), and click **Save contact**. The panel shows *Marketing: Opted in* and the notes.
+3. **Merge the same customer.** Sarah wrote on two channels, so she also appears as **Mark Smith**. Open **Sarah**, click
+   **Merge**, search `Mark`, pick **Mark Smith**, and confirm. The inbox reloads, and both conversations now belong to
+   Sarah. Mark's tags move over, and his details fill in anything Sarah's contact was missing.
+4. **Contacts page.** Click **Contacts** in the sidebar (under *Main*). The table shows each customer's channels, tags and
+   last activity. Type in **Search** (name, phone or email) or click tag chips to filter: **Bridal** shows Ananya Rao and
+   Priya Singh.
+5. **Import a CSV.** Click **Import CSV** and choose a file with a header row
+   `name,phone,email,birthday,anniversary,tags` (dates as `YYYY-MM-DD`, tags separated by `;`). A summary appears, e.g.
+   *Imported: 1 created, 1 updated, 1 skipped*, with the reason for each skipped row (e.g. *Row 3: Invalid birthday*).
+   A row with the phone or email of an existing contact updates that contact instead of adding a new one.
+6. **Manage tags.** Click **Manage tags** to add, rename, recolor or delete tags. Deleting a tag removes it from every
+   contact.
+7. **Segments.** Switch to the **Segments** tab. Pick rules (tags a customer has, or doesn't have, channels, marketing
+   consent, active in the last N days, birthday in the next N days). **Matching contacts** on the right updates as you
+   click. Enter a **Segment name** (e.g. *VIP customers*) → **Save segment**. It appears under **Saved segments** with its
+   member count. Segments are dynamic: a customer tagged VIP later joins *VIP customers* automatically.
+
+**Reset demo data** restores the three seeded tags and removes saved segments.
+
+## 15. Automated E2E
 
 `npm run e2e` runs this whole guide in a browser against mock Meta and Google APIs that it starts on port 8765.
 Start the backend for it with:
@@ -218,7 +246,7 @@ GMAIL_API_URL=http://127.0.0.1:8765/gmail/v1 \
 uv run uvicorn app.main:app --port 8000
 ```
 
-## 15. Sign out
+## 16. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 

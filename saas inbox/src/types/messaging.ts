@@ -1,8 +1,21 @@
 export type Platform = 'whatsapp' | 'instagram' | 'messenger' | 'gmail' | 'website';
 
+export type Consent = 'opted_in' | 'opted_out' | 'unknown';
+
+export interface ContactTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Contact {
   id: string;
   name: string;
+  tags?: ContactTag[];
+  birthday?: string;
+  anniversary?: string;
+  notes?: string;
+  consent?: Consent;
   username?: string;
   avatar?: string;
   phone?: string;

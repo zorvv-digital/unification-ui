@@ -20,7 +20,11 @@
         "name": "Rahul Kumar",
         "avatar": "https://i.pravatar.cc/150?u=rahul",
         "phone": "+91 98765 43210",
-        "email": "rahul@example.com"
+        "email": "rahul@example.com",
+        "tags": [
+          "VIP",
+          "Regular"
+        ]
       },
       "messages": [
         {
@@ -55,7 +59,10 @@
       "contact": {
         "name": "Priya Singh",
         "avatar": "https://i.pravatar.cc/150?u=priya",
-        "phone": "+91 98111 22233"
+        "phone": "+91 98111 22233",
+        "tags": [
+          "Bridal"
+        ]
       },
       "messages": [
         {
@@ -74,7 +81,10 @@
         "name": "Sarah",
         "username": "@sarah_designs",
         "avatar": "https://i.pravatar.cc/150?u=sarah",
-        "email": "sarah@designs.com"
+        "email": "sarah@designs.com",
+        "tags": [
+          "Regular"
+        ]
       },
       "messages": [
         {
@@ -167,7 +177,11 @@
       "contact": {
         "name": "Ananya Rao",
         "avatar": "https://i.pravatar.cc/150?u=ananya",
-        "email": "ananya.rao@example.com"
+        "email": "ananya.rao@example.com",
+        "tags": [
+          "Bridal",
+          "VIP"
+        ]
       },
       "messages": [
         {
@@ -288,5 +302,19 @@
       "whatsapp"
     ]
   },
-  "website_greeting": "Hi! Welcome to Glow Salon & Spa. Ask us about services, prices, or bookings."
+  "website_greeting": "Hi! Welcome to Glow Salon & Spa. Ask us about services, prices, or bookings.",
+  "tags": [
+    {
+      "name": "VIP",
+      "color": "#f59e0b"
+    },
+    {
+      "name": "Regular",
+      "color": "#10b981"
+    },
+    {
+      "name": "Bridal",
+      "color": "#ec4899"
+    }
+  ]
 }
