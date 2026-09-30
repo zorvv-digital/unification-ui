@@ -611,6 +611,69 @@ await step('C5. a segment previews its members live and is saved', async () => {
   await page.screenshot({ path: SHOTS + 'C5-segments.png' });
 });
 
+// --- Customer app (add-customer-app) ---
+let phone;
+const appConversation = async platform => (await api('/conversations', {}, token))
+  .find(c => c.contact.name === 'Kavya Nair' && c.platform === platform && c.external_id.startsWith('app:'));
+const phoneChat = platform => phone.getByLabel(`${platform} chat`);
+
+await step('CA1. the sidebar opens the customer app, where a name starts a session', async () => {
+  await page.goto(`${UI}/inbox`);
+  [phone] = await Promise.all([page.context().waitForEvent('page'), page.getByRole('link', { name: 'Customer app' }).click()]);
+  phone.on('pageerror', e => errors.push(e.message));
+  await phone.setViewportSize({ width: 900, height: 860 });
+  await phone.waitForURL('**/phone');
+  await phone.getByLabel('Your name').fill('Kavya Nair');
+  await phone.getByRole('button', { name: 'Start chatting' }).click();
+  await phone.getByLabel('Open WhatsApp').waitFor();
+});
+
+await step('CA2. a WhatsApp message lands in the inbox live, and the AI answers on the phone', async () => {
+  await phone.getByLabel('Open WhatsApp').click();
+  await phone.getByLabel('Message').fill('Do you do keratin treatments?');
+  await phone.getByLabel('Send').click();
+  await page.getByText('Do you do keratin treatments?').first().waitFor({ timeout: 5000 });
+  const conversation = await appConversation('whatsapp');
+  assert.ok(conversation.contact.phone.startsWith('+91 9'));
+  assert.ok(conversation.unread_count >= 1);
+  await phoneChat('whatsapp').locator('.items-start').first().waitFor({ timeout: 10000 }); // the AI's answer
+});
+
+await step('CA3. opening the conversation shows read ticks, and a staff reply reaches the phone live', async () => {
+  await page.getByText('Kavya Nair').first().click();
+  await phone.getByLabel('Read').first().waitFor({ timeout: 5000 });
+  await page.fill('textarea[placeholder="Type a message..."]', 'Yes! Keratin takes about 3 hours.');
+  await page.keyboard.press('Enter');
+  await phoneChat('whatsapp').getByText('Yes! Keratin takes about 3 hours.').waitFor({ timeout: 5000 });
+  await phone.screenshot({ path: SHOTS + 'CA3-phone-whatsapp.png' });
+  await page.screenshot({ path: SHOTS + 'CA3-inbox.png' });
+});
+
+await step('CA4. a Gmail email arrives as a thread, and replies on other apps badge the home screen', async () => {
+  await phone.getByLabel('Back').click();
+  await phone.getByLabel('Open Gmail').click();
+  await phone.getByLabel('Subject').fill('Bridal trial');
+  await phone.getByLabel('Message').fill('Can I book a bridal makeup trial next week?');
+  await phone.getByLabel('Send').click();
+  await page.getByText('Bridal trial').first().waitFor({ timeout: 5000 });
+  const gmail = await appConversation('gmail');
+  assert.equal(gmail.subject, 'Bridal trial');
+  await phone.getByLabel('Back').click();
+  await api(`/conversations/${gmail.id}/messages`, { method: 'POST', body: JSON.stringify({ content: 'Of course, Tuesday 4 PM?' }) }, token);
+  await phone.getByLabel('1 new in Gmail').waitFor({ timeout: 5000 });
+  await phone.getByLabel('Open Gmail').click();
+  await phoneChat('gmail').getByText('Of course, Tuesday 4 PM?').waitFor();
+  await phone.screenshot({ path: SHOTS + 'CA4-phone-gmail.png' });
+});
+
+await step('CA5. customer-app conversations get no canned demo replies', async () => {
+  await page.waitForTimeout(3500); // longer than the demo reply delay (3 s)
+  const whatsapp = await appConversation('whatsapp');
+  const messages = await api(`/conversations/${whatsapp.id}/messages`, {}, token);
+  assert.equal(messages.at(-1).content, 'Yes! Keratin takes about 3 hours.');
+  await phone.close();
+});
+
 // --- AI playground (add-ai-agents) ---
 const chat = async text => {
   const before = await page.locator('.bg-white.rounded-tl-none').filter({ hasText: /\S/ }).count();

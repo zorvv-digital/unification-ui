@@ -590,3 +590,48 @@ automatically. Every rule given must match:
 | Delete | `DELETE /segments/{SEG_ID}` | none | `204` |
 
 **Demo reset** (§8) restores the seeded tags and removes your segments and any tags you added.
+
+---
+
+## 16. Customer app (demo)
+
+The customer side of the demo's simulated WhatsApp, Instagram, Messenger and Gmail channels. The `/phone` page in the
+inbox app uses it (see `docs/ui-user-flow.md`). Everything is under the **Customer app (demo)** tag. The endpoints are
+public, so there's no Authorize. They exist only in demo mode; with `DEMO_MODE=false` every call returns `404`.
+
+### 16.1 Session and messages
+| Step | Endpoint | Body | Expect |
+|---|---|---|---|
+| Config | `GET /customer-app/config` | none | `business_name` ("Glow Salon & Spa") and `platforms` |
+| Session | `POST /customer-app/sessions` | `{"name": "Priya Menon"}` | `customer_token`. Copy it (CUST_TOKEN). Nothing appears in the inbox yet |
+| Bad name | same | `{"name": "  "}` or more than 60 characters | `422` |
+| WhatsApp | `POST /customer-app/messages` with `x-customer-token` = CUST_TOKEN | `{"platform": "whatsapp", "content": "Do you have a slot on Saturday?"}` | `201`, `direction: "inbound"`. As demo staff, `GET /conversations` shows a WhatsApp conversation from Priya Menon with `external_id` `app:...`, a `+91 9...` phone and 1 unread. The demo agent answers, because WhatsApp has auto-reply on |
+| Instagram / Messenger | same | `{"platform": "instagram", "content": "Hi!"}` | a separate conversation. The Instagram contact gets a username like `priya.menon.1a2b` |
+| Gmail | same | `{"platform": "gmail", "content": "Hello", "subject": "Bridal package"}` | an email thread with that subject; the contact gets an `@example.com` address. Without `subject`, the first email returns `422`; later ones don't need it |
+| History | `GET /customer-app/messages` with the same token | none | every message of the session, oldest first, each with its `platform`, `direction` and `status` |
+
+In Swagger, paste CUST_TOKEN into the `x-customer-token` field. The live event stream needs curl (or run everything there):
+
+```bash
+T=$(curl -s -X POST -H "Content-Type: application/json" -d '{"name": "Priya Menon"}' \
+     http://localhost:8000/api/v1/customer-app/sessions | python -c "import sys,json;print(json.load(sys.stdin)['customer_token'])")
+curl -X POST -H "X-Customer-Token: $T" -H "Content-Type: application/json" \
+     -d '{"platform": "messenger", "content": "Hi, are you open today?"}' http://localhost:8000/api/v1/customer-app/messages
+curl -N "http://localhost:8000/api/v1/customer-app/events?token=$T"     # leave this running
+```
+
+### 16.2 Live events and behavior
+| Check | Expect |
+|---|---|
+| Staff reply | reply to Priya's conversation as demo staff: the `events` stream prints `event: message.created` with `direction: "outbound"` and the `platform` |
+| Read | `POST /conversations/{id}/read` as staff: the stream prints `event: conversation.read` with the `platform` |
+| Other customers | replies to other conversations never appear on Priya's stream |
+| No canned replies | staff replies in a customer-app conversation get no simulated customer answer (seeded conversations still do) |
+| Reset | `POST /demo/reset` removes customer-app conversations. The same token keeps working: history is empty, and the next message starts a new conversation |
+
+### 16.3 Error cases
+| Case | Expect |
+|---|---|
+| Missing, made-up, or other-workspace `X-Customer-Token` | `401` (the app then starts a new session) |
+| `platform: "fax"`, blank content, or content over 2,000 characters | `422` |
+| The 21st message within a minute from one session | `429` |

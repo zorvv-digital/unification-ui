@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
   Inbox, MessageSquare, Users, BarChart2, Zap, Settings,
-  ChevronDown, X, Mail, LogOut, RotateCcw
+  ChevronDown, X, Mail, LogOut, RotateCcw, Smartphone
 } from 'lucide-react';
 import { apiService } from '../../context/MessagingContext';
 import { clearToken, type ApiUser } from '../../services/messaging/HttpMessageService';
@@ -126,6 +126,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
               </button>
             )}
           </div>
+          {user?.workspace.is_demo && (
+            <a href="/phone" target="_blank" rel="noreferrer" className="mt-2 flex items-center justify-center gap-2 w-full px-3 py-1.5 rounded-lg bg-gray-900 text-xs font-medium text-white hover:bg-gray-800 transition-colors">
+              <Smartphone size={14} />
+              Customer app
+            </a>
+          )}
           {user?.workspace.is_demo && (
             <button onClick={resetDemo} className="mt-2 flex items-center justify-center gap-2 w-full px-3 py-1.5 rounded-lg border border-[var(--color-brand-border)] text-xs font-medium text-[var(--color-brand-text-secondary)] hover:bg-gray-50 hover:text-[var(--color-brand-text)] transition-colors">
               <RotateCcw size={14} />

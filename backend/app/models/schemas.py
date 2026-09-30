@@ -457,6 +457,57 @@ class LeadSubmit(BaseModel):
 
 
 # ==========================================
+# Customer app (demo): the customer side of the simulated channels
+# ==========================================
+
+CustomerPlatform = Literal["whatsapp", "instagram", "messenger", "gmail"]
+
+
+class CustomerAppConfig(BaseModel):
+    business_name: str
+    platforms: list[CustomerPlatform]
+
+
+class CustomerSessionCreate(BaseModel):
+    name: str = Field(max_length=60)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name must not be blank")
+        return value.strip()
+
+
+class CustomerSession(BaseModel):
+    """Send the token as `X-Customer-Token` (or `?token=` for the event stream)."""
+    customer_token: str
+    name: str
+
+
+class CustomerMessageCreate(VisitorMessageCreate):
+    platform: CustomerPlatform
+    subject: Optional[str] = Field(None, max_length=200)  # required on the first Gmail message
+
+
+class CustomerMessage(BaseModel):
+    """A message as the customer sees it."""
+    id: uuid.UUID
+    platform: str
+    direction: str
+    type: str
+    content: str
+    status: str
+    timestamp: UtcDatetime = Field(validation_alias="created_at")
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CustomerRead(BaseModel):
+    """Staff opened the customer's conversation on this platform."""
+    platform: str
+
+
+# ==========================================
 # CRM: contacts, tags, segments
 # ==========================================
 

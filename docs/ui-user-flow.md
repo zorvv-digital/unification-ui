@@ -2,7 +2,7 @@
 
 How to run the platform locally and walk through the demo as a business user would.
 The same flow is automated in `saas inbox/e2e/inbox-flow.mjs` (`npm run e2e`; start the backend pointed at the
-mock Meta and Google APIs it runs, see §15).
+mock Meta and Google APIs it runs, see §16).
 
 ## 0. Run both apps
 
@@ -232,7 +232,35 @@ The demo has three tags: **VIP**, **Regular** and **Bridal**.
 
 **Reset demo data** restores the three seeded tags and removes saved segments.
 
-## 15. Automated E2E
+## 15. Customer app: demo from the customer's side
+
+Show a prospect what their customers experience. The **customer app** is a phone screen where you are the customer:
+you write to the salon on WhatsApp, Instagram, Messenger or Gmail. Messages land in the inbox live, and replies from
+staff or the AI come back to the phone.
+
+1. **Open it.** In the demo inbox, click **Customer app** (bottom-left, above *Reset demo data*). It opens
+   **http://localhost:5173/phone** in a new tab. Put the two windows side by side.
+2. **Pick a name.** Enter a name, e.g. `Priya Menon`, and click **Start chatting**. The phone's home screen shows
+   WhatsApp, Instagram, Messenger, Gmail and Website.
+3. **Write on WhatsApp.** Tap **WhatsApp** and send `Hi! Do you have a slot on Saturday?`. In the inbox, a WhatsApp
+   conversation from Priya Menon appears at the top right away, with an unread badge and a phone number in the contact
+   panel. The demo AI answers right away (WhatsApp has AI auto-reply on), and its answer shows on the phone.
+4. **Reply as staff.** Open the conversation in the inbox and reply. The reply appears on the phone within a second.
+   Priya's messages get blue ticks once the conversation is open in the inbox.
+5. **Other apps.** Go back to the home screen and try **Instagram** (shows *Seen* when read) and **Messenger**. For
+   **Gmail**, the first email needs a **Subject**. It arrives in the inbox as an email thread with that subject, and the
+   reply appears as an email on the phone. Replies that arrive while you're on the home screen show a red badge on the
+   app. **Website** opens the website chat demo page (§13).
+6. **Real conversations only.** Chats started from the customer app never get the demo's canned customer replies,
+   because someone is typing on the phone. The seeded conversations still reply automatically.
+7. **Start over.** **Not Priya Menon? Start over** on the home screen forgets the name. **Reset demo data** removes
+   these conversations; an open phone keeps working and starts empty.
+
+**On a real phone.** With the phone and the computer on the same Wi-Fi, start the frontend with
+`npm run dev -- --host`, set `VITE_API_URL=http://<computer's LAN IP>:8000/api/v1` in `.env.local`, start the backend
+with `--host 0.0.0.0`, and open `http://<computer's LAN IP>:5173/phone` on the phone.
+
+## 16. Automated E2E
 
 `npm run e2e` runs this whole guide in a browser against mock Meta and Google APIs that it starts on port 8765.
 Start the backend for it with:
@@ -246,7 +274,7 @@ GMAIL_API_URL=http://127.0.0.1:8765/gmail/v1 \
 uv run uvicorn app.main:app --port 8000
 ```
 
-## 16. Sign out
+## 17. Sign out
 
 Click the **log-out icon** next to your name. You return to **Sign in**.
 

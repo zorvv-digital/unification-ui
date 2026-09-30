@@ -19,7 +19,7 @@ from app.services.agent_service import AgentService
 from app.services.auth_service import AuthService
 from app.services.base import BaseService
 from app.services.channel_service import InboundMessage
-from app.services.inbox_service import InboxService
+from app.services.inbox_service import InboxService, is_customer_app
 from app.services.website_service import WebsiteService
 
 logger = logging.getLogger("demo")
@@ -133,8 +133,8 @@ class DemoService(BaseService):
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
             conversation = result.scalars().first()
-            if not conversation:
-                return  # demo was reset meanwhile
+            if not conversation or is_customer_app(conversation.external_id):
+                return  # demo was reset meanwhile, or a person answers in the customer app
             count = await db.execute(select(func.count()).where(Message.conversation_id == conversation_id))
             replies = _load_seed()["replies"]
             content = replies[count.scalar_one() % len(replies)]

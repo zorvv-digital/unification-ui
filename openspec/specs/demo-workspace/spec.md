@@ -28,7 +28,7 @@ The demo user's email and password SHALL be configurable, and the demo user SHAL
 - **THEN** the client receives a token for the demo workspace
 
 ### Requirement: Simulated customer replies
-In the demo workspace, the system SHALL generate a customer reply shortly after each outbound message sent by a staff member, delivered as a normal inbound message including live events. Outbound messages authored by an AI agent SHALL NOT trigger a simulated customer reply.
+In the demo workspace, the system SHALL generate a customer reply shortly after each outbound message sent by a staff member, delivered as a normal inbound message including live events. Outbound messages authored by an AI agent SHALL NOT trigger a simulated customer reply. Conversations started from the customer app SHALL NOT receive simulated customer replies, because a person answers there.
 
 #### Scenario: Reply after sending
 - **WHEN** a demo user sends a message in a demo conversation
@@ -40,6 +40,10 @@ In the demo workspace, the system SHALL generate a customer reply shortly after 
 
 #### Scenario: AI reply does not trigger simulation
 - **WHEN** an AI agent replies in a demo conversation
+- **THEN** no simulated customer reply is generated
+
+#### Scenario: Customer-app conversation
+- **WHEN** a demo user replies in a conversation started from the customer app
 - **THEN** no simulated customer reply is generated
 
 ### Requirement: Demo reset

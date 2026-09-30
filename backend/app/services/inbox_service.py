@@ -7,13 +7,23 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Channel, Contact, Conversation, Message, utcnow
-from app.models.schemas import VisitorMessage, ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
+from app.models.schemas import CustomerMessage, CustomerRead, VisitorMessage, ConversationResponse, ConversationUpdate, MessageCreate, MessageResponse, TemplateSend
 from app.providers.whatsapp import PLACEHOLDER
 from app.services.base import BaseService
 from app.services.channel_service import ADAPTERS, ChannelError, ChannelService, InboundMessage, StatusUpdate, TokenError
 from app.services.event_service import EventService
 
 PREVIEW_LENGTH = 120
+CUSTOMER_APP_PREFIX = "app:"  # external id prefix of conversations started from the demo customer app
+
+
+def is_customer_app(external_id: str) -> bool:
+    return external_id.startswith(CUSTOMER_APP_PREFIX)
+
+
+def customer_key(external_id: str) -> tuple[str, str]:
+    """Event stream key of the customer app session that owns a customer-app conversation."""
+    return ("customer", external_id.removeprefix(CUSTOMER_APP_PREFIX))
 # Delivery statuses only move forward; `failed` always applies.
 STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
 
@@ -288,7 +298,10 @@ class InboxService(BaseService):
             if not contact:
                 lookup_name = getattr(ADAPTERS[channel.adapter_type], "lookup_name", None)
                 name = inbound.name or (lookup_name and await lookup_name(channel, inbound.customer_id))
-                contact = Contact(workspace_id=channel.workspace_id, name=name or inbound.customer_id, email=inbound.email)
+                contact = Contact(
+                    workspace_id=channel.workspace_id, name=name or inbound.customer_id, email=inbound.email,
+                    phone=inbound.phone, username=inbound.username,
+                )
             conversation = Conversation(
                 workspace_id=channel.workspace_id,
                 channel=channel,
@@ -335,6 +348,8 @@ class InboxService(BaseService):
         )
         await db.commit()
         EventService.publish(workspace_id, "conversation.updated", ConversationResponse.model_validate(conversation))
+        if is_customer_app(conversation.external_id):  # read ticks in the customer app
+            EventService.publish(customer_key(conversation.external_id), "conversation.read", CustomerRead(platform=conversation.platform))
         return conversation
 
     @classmethod
@@ -386,3 +401,5 @@ class InboxService(BaseService):
         EventService.publish(conversation.workspace_id, "conversation.updated", ConversationResponse.model_validate(conversation))
         if conversation.platform == "website":  # the visitor's open widget gets staff and AI replies live
             EventService.publish(("visitor", conversation.external_id), "message.created", VisitorMessage.model_validate(message))
+        elif is_customer_app(conversation.external_id):  # the open customer app gets every message live
+            EventService.publish(customer_key(conversation.external_id), "message.created", CustomerMessage.model_validate(message))

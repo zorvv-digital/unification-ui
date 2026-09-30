@@ -35,6 +35,8 @@ class InboundMessage:
     thread_id: Optional[str] = None  # conversation key when a channel threads (email); defaults to customer_id
     subject: Optional[str] = None
     email: Optional[str] = None  # identifies the contact across conversations
+    phone: Optional[str] = None  # stored on a new contact
+    username: Optional[str] = None  # stored on a new contact
 
 
 @dataclass

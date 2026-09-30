@@ -10,6 +10,7 @@ from app.api.agents import router as agents_router
 from app.api.widget import router as widget_router
 from app.api.tags import router as tags_router
 from app.api.segments import router as segments_router
+from app.api.customer_app import router as customer_app_router
 from app.models.schemas import HealthResponse
 
 api_router = APIRouter()
@@ -26,6 +27,7 @@ api_router.include_router(agents_router)
 api_router.include_router(widget_router)
 api_router.include_router(tags_router)
 api_router.include_router(segments_router)
+api_router.include_router(customer_app_router)
 
 
 @api_router.get("/health", response_model=HealthResponse, tags=["System"])
