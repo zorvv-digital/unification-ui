@@ -21,6 +21,20 @@ export interface Contact {
   phone?: string;
   email?: string;
   online?: boolean;
+  productStatus?: ProductStatus;
+  productInterests?: ContactProductInterest[];
+  productClassifiedAt?: string;
+}
+
+export type ProductStatus = 'pending' | 'determined' | 'not_determined';
+
+export interface ContactProductInterest {
+  product_id: string;
+  name: string;
+  color: string;
+  source: 'ai' | 'staff';
+  confidence: number | null;
+  last_detected_at: string;
 }
 
 export type ConversationStatus = 'open' | 'closed';

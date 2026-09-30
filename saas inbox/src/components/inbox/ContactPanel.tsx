@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { X, Mail, Phone, Tag, Calendar, MessageSquare, StickyNote, Cake, Heart, ShieldCheck, Plus, GitMerge } from 'lucide-react';
+import { X, Mail, Phone, Tag, Calendar, MessageSquare, StickyNote, Cake, Heart, ShieldCheck, Plus, GitMerge, RefreshCw } from 'lucide-react';
 import { Avatar } from '../messaging/Avatar';
 import type { Consent, Contact, ContactTag, Conversation } from '../../types/messaging';
 import { MessageCircle } from 'lucide-react';
 import { InstagramIcon } from '../icons/InstagramIcon';
 import { apiService } from '../../context/MessagingContext';
 import { crmApi, TAG_COLORS, type ContactChanges, type ContactListItem } from '../../services/crmApi';
+import { productApi, type Product } from '../../services/productApi';
 
 interface ContactPanelProps {
   isMobileOpen: boolean;
@@ -13,6 +14,7 @@ interface ContactPanelProps {
   contact?: Contact;
   conversation?: Conversation;
   messageCount?: number;
+  products?: Product[];
 }
 
 const CONSENT_LABELS: Record<Consent, string> = { opted_in: 'Opted in', opted_out: 'Opted out', unknown: 'Unknown' };
@@ -40,7 +42,8 @@ export const ContactPanel: React.FC<ContactPanelProps> = ({
   onClose,
   contact,
   conversation,
-  messageCount = 0
+  messageCount = 0,
+  products = [],
 }) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<ContactChanges>({});
@@ -49,8 +52,18 @@ export const ContactPanel: React.FC<ContactPanelProps> = ({
   const [newTag, setNewTag] = useState('');
   const [mergeOpen, setMergeOpen] = useState(false);
   const [error, setError] = useState('');
+  const [productContact, setProductContact] = useState<Contact | undefined>(contact);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [productBusy, setProductBusy] = useState(false);
 
-  useEffect(() => { setEditing(false); setTagPickerOpen(false); setMergeOpen(false); setError(''); }, [contact?.id]);
+  useEffect(() => {
+    setEditing(false);
+    setTagPickerOpen(false);
+    setProductPickerOpen(false);
+    setMergeOpen(false);
+    setError('');
+    setProductContact(contact);
+  }, [contact]);
 
   const run = async (action: () => Promise<unknown>) => {
     setError('');
@@ -100,6 +113,20 @@ export const ContactPanel: React.FC<ContactPanelProps> = ({
 
   const tags = contact?.tags ?? [];
   const available = allTags.filter(t => !tags.some(own => own.id === t.id));
+  const interests = productContact?.productInterests ?? [];
+  const availableProducts = products.filter(product => !interests.some(interest => interest.product_id === product.id));
+  const productAction = async (action: () => Promise<Contact>) => {
+    setProductBusy(true);
+    setError('');
+    try {
+      setProductContact(await action());
+      setProductPickerOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update product interests');
+    } finally {
+      setProductBusy(false);
+    }
+  };
 
   return (
     <>
@@ -255,6 +282,49 @@ export const ContactPanel: React.FC<ContactPanelProps> = ({
                       <input aria-label="New tag name" placeholder="Create tag…" className="flex-1 px-2 py-1 text-xs rounded-md border border-[var(--color-brand-border)] focus:outline-none focus:border-gray-900" value={newTag} onChange={e => setNewTag(e.target.value)} />
                       <button type="submit" aria-label="Create tag" className="px-2 py-1 rounded-md bg-gray-900 text-white"><Plus size={12} /></button>
                     </form>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-[var(--color-brand-border)] my-2"></div>
+
+              {/* Product interests */}
+              <div className="py-2 relative">
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Interested in</h5>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => productAction(() => productApi.classify(contact.id))}
+                      disabled={productBusy}
+                      title="Re-detect from all customer conversations"
+                      className="text-[var(--color-brand-text)] hover:underline text-xs flex items-center gap-1 disabled:opacity-50"
+                    ><RefreshCw size={11} className={productBusy ? 'animate-spin' : ''} /> Re-detect</button>
+                    <button onClick={() => setProductPickerOpen(open => !open)} className="text-[var(--color-brand-text)] hover:underline text-xs">Add</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {interests.map(interest => (
+                    <span key={interest.product_id} className="px-2 py-1 text-xs font-medium rounded-md border flex items-center gap-1" style={{ color: interest.color, borderColor: `${interest.color}40`, backgroundColor: `${interest.color}14` }}>
+                      {interest.name}
+                      {interest.confidence !== null && <span className="opacity-70">{Math.round(interest.confidence * 100)}%</span>}
+                      {interest.source === 'staff' && <span className="text-[9px] uppercase opacity-70">staff</span>}
+                      <button disabled={productBusy} onClick={() => productAction(() => productApi.removeInterest(contact.id, interest.product_id))} aria-label={`Remove product interest ${interest.name}`} className="hover:opacity-70"><X size={12} /></button>
+                    </span>
+                  ))}
+                  {!interests.length && (
+                    <span className="text-xs text-[var(--color-brand-text-secondary)]">
+                      {productContact?.productStatus === 'pending' ? 'Not analysed yet' : 'Not determined'}
+                    </span>
+                  )}
+                </div>
+                {productPickerOpen && (
+                  <div className="mt-3 border border-[var(--color-brand-border)] rounded-lg p-2 bg-white shadow-sm flex flex-wrap gap-1.5">
+                    {availableProducts.map(product => (
+                      <button key={product.id} disabled={productBusy} onClick={() => productAction(() => productApi.addInterest(contact.id, product.id))} className="px-2 py-1 text-xs font-medium rounded-md border hover:opacity-80" style={{ color: product.color, borderColor: `${product.color}40`, backgroundColor: `${product.color}14` }}>
+                        {product.name}
+                      </button>
+                    ))}
+                    {!availableProducts.length && <span className="text-xs text-[var(--color-brand-text-secondary)]">All products are already added</span>}
                   </div>
                 )}
               </div>

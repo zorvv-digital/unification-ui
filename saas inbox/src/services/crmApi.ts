@@ -33,6 +33,8 @@ export interface SegmentRules {
   active_within_days: number | null;
   consent: Consent[];
   birthday_within_days: number | null;
+  products: string[];
+  products_match: 'any' | 'all';
 }
 
 export interface Segment {
@@ -49,6 +51,7 @@ export interface SegmentMembers {
 
 export const emptyRules = (): SegmentRules => ({
   tags: [], tags_match: 'any', exclude_tags: [], platforms: [], active_within_days: null, consent: [], birthday_within_days: null,
+  products: [], products_match: 'any',
 });
 
 const api = () => {
@@ -58,10 +61,12 @@ const api = () => {
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const crmApi = {
-  listContacts: (q = '', tagIds: string[] = []) => {
+  listContacts: (q = '', tagIds: string[] = [], productIds: string[] = [], productStatus?: 'pending' | 'determined' | 'not_determined') => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     tagIds.forEach(id => params.append('tag_ids', id));
+    productIds.forEach(id => params.append('product_ids', id));
+    if (productStatus) params.set('product_status', productStatus);
     return api().request<ContactListItem[]>(`/contacts?${params}`);
   },
   updateContact: (id: string, changes: ContactChanges) => api().request<ApiContact>(`/contacts/${id}`, json('PATCH', changes)),

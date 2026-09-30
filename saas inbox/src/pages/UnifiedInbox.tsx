@@ -7,7 +7,8 @@ import { ConversationList } from '../components/inbox/ConversationList';
 import { MessageWorkspace } from '../components/inbox/MessageWorkspace';
 import { ContactPanel } from '../components/inbox/ContactPanel';
 import { useMessaging } from '../context/MessagingContext';
-import type { FilterType, SortType } from '../components/inbox/FilterBar';
+import type { FilterType } from '../components/inbox/FilterBar';
+import { productApi, type Product } from '../services/productApi';
 
 const GMAIL_RESULTS: Record<string, string> = {
   connected: 'Gmail connected. New customer emails arrive in the inbox within a minute or two.',
@@ -29,13 +30,18 @@ export default function UnifiedInbox() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  const [activeSort, setActiveSort] = useState<SortType>('latest');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [activeProductId, setActiveProductId] = useState<string>();
   // Google sign-in returns to /inbox?gmail=connected|denied|error
   const [searchParams, setSearchParams] = useSearchParams();
   const [gmailResult, setGmailResult] = useState(searchParams.get('gmail'));
   useEffect(() => {
     if (searchParams.has('gmail')) setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    productApi.list().then(setProducts).catch(error => console.error('Failed to load products', error));
+  }, []);
 
   // Mark as read when selected or when new messages arrive in active conversation
   useEffect(() => {
@@ -87,6 +93,14 @@ export default function UnifiedInbox() {
     else if (activeFilter === 'unread') result = result.filter(c => c.unreadCount > 0);
     else if (activeFilter === 'needs-human') result = result.filter(c => c.needsHuman);
     else if (activeFilter === 'assigned') result = result.filter(() => false); // Mock assigned to me
+
+    // Product interest is classified per contact across all of their channel conversations.
+    if (activeProductId) {
+      result = result.filter(conversation => {
+        const contact = contacts.find(item => item.id === conversation.contactId);
+        return contact?.productInterests?.some(item => item.product_id === activeProductId) ?? false;
+      });
+    }
     
     // 2. Apply Search
     if (searchQuery.trim()) {
@@ -105,24 +119,17 @@ export default function UnifiedInbox() {
       });
     }
 
-    // 3. Apply Sort
-    result.sort((a, b) => {
-      if (activeSort === 'latest') {
-        return b.lastMessageAt - a.lastMessageAt;
-      } else if (activeSort === 'oldest') {
-        return a.lastMessageAt - b.lastMessageAt;
-      } else if (activeSort === 'unread-first') {
-        // If one is unread and other is read, unread goes first
-        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-        if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
-        // Otherwise fallback to latest
-        return b.lastMessageAt - a.lastMessageAt;
-      }
-      return 0;
-    });
+    result.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
     
     return result;
-  }, [conversations, contacts, activeFilter, searchQuery, activeSort, getMessages]);
+  }, [conversations, contacts, activeFilter, activeProductId, searchQuery, getMessages]);
+
+  const createProduct = async (name: string, description: string, keywords: string[]) => {
+    const product = await productApi.create({ name, description: description || undefined, keywords });
+    setProducts(current => [...current, product].sort((a, b) => a.name.localeCompare(b.name)));
+    setActiveFilter('all');
+    setActiveProductId(product.id);
+  };
 
   const activeConversation = conversations.find(c => c.id === selectedConversationId);
   const activeContact = activeConversation ? contacts.find(c => c.id === activeConversation.contactId) : undefined;
@@ -176,8 +183,10 @@ export default function UnifiedInbox() {
               stats={stats}
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
-              activeSort={activeSort}
-              onSortChange={setActiveSort}
+              products={products}
+              activeProductId={activeProductId}
+              onProductChange={setActiveProductId}
+              onCreateProduct={createProduct}
               selectedConversationId={selectedConversationId}
               onSelectConversation={setSelectedConversationId}
             />
@@ -206,6 +215,7 @@ export default function UnifiedInbox() {
               contact={activeContact}
               conversation={activeConversation}
               messageCount={activeMessages.length}
+              products={products}
             />
           </div>
           
@@ -217,6 +227,7 @@ export default function UnifiedInbox() {
                contact={activeContact}
                conversation={activeConversation}
                messageCount={activeMessages.length}
+               products={products}
              />
           </div>
 

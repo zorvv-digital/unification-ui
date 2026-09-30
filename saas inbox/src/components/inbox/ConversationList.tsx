@@ -4,7 +4,8 @@ import { InstagramIcon } from '../icons/InstagramIcon';
 import { FaWhatsapp } from 'react-icons/fa';
 import { ChannelSummary } from './ChannelSummary';
 import { FilterBar } from './FilterBar';
-import type { FilterType, SortType } from './FilterBar';
+import type { FilterType } from './FilterBar';
+import type { Product } from '../../services/productApi';
 import { Avatar } from '../messaging/Avatar';
 import type { Conversation, Contact, Message } from '../../types/messaging';
 
@@ -14,8 +15,10 @@ interface ConversationListProps {
   getMessages: (id: string) => Message[];
   activeFilter: FilterType;
   onFilterChange: (f: FilterType) => void;
-  activeSort: SortType;
-  onSortChange: (s: SortType) => void;
+  products: Product[];
+  activeProductId?: string;
+  onProductChange: (productId?: string) => void;
+  onCreateProduct: (name: string, description: string, keywords: string[]) => Promise<void>;
   selectedConversationId?: string;
   onSelectConversation: (id: string) => void;
   stats: any;
@@ -24,18 +27,24 @@ interface ConversationListProps {
 export const ConversationList: React.FC<ConversationListProps> = ({ 
   conversations, contacts, getMessages,
   activeFilter, onFilterChange,
-  activeSort, onSortChange,
+  products, activeProductId, onProductChange, onCreateProduct,
   selectedConversationId, onSelectConversation,
   stats
 }) => {
   return (
     <div className="h-full bg-white border-r border-[var(--color-brand-border)] flex flex-col z-0">
-      <ChannelSummary stats={stats} />
+      <ChannelSummary
+        stats={stats}
+        activeFilter={activeFilter}
+        onFilterChange={filter => { onFilterChange(filter); onProductChange(undefined); }}
+      />
       <FilterBar 
         activeFilter={activeFilter} 
         onFilterChange={onFilterChange} 
-        activeSort={activeSort}
-        onSortChange={onSortChange}
+        products={products}
+        activeProductId={activeProductId}
+        onProductChange={onProductChange}
+        onCreateProduct={onCreateProduct}
       />
       
       <div className="flex-1 overflow-y-auto flex flex-col">
@@ -109,6 +118,13 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                       </div>
                     )}
                   </div>
+                  {!!contact.productInterests?.length && (
+                    <div className="flex gap-1 mt-1 overflow-hidden">
+                      {contact.productInterests.slice(0, 2).map(product => (
+                        <span key={product.product_id} className="px-1.5 py-0.5 rounded text-[9px] font-semibold whitespace-nowrap" style={{ color: product.color, backgroundColor: `${product.color}14` }}>{product.name}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </button>
             );

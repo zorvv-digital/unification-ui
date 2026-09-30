@@ -1,5 +1,5 @@
 import type { MessageService } from './MessageService';
-import type { Consent, Contact, ContactTag, Conversation, Message, Platform } from '../../types/messaging';
+import type { Consent, Contact, ContactProductInterest, ContactTag, Conversation, Message, Platform, ProductStatus } from '../../types/messaging';
 
 const TOKEN_KEY = 'unification.token';
 
@@ -21,6 +21,9 @@ export interface ApiContact {
   notes?: string | null;
   consent?: Consent;
   tags?: ContactTag[];
+  product_status?: ProductStatus;
+  product_interests?: ContactProductInterest[];
+  product_classified_at?: string | null;
 }
 
 export interface ApiConversation {
@@ -71,6 +74,9 @@ export const toContact = (c: ApiContact): Contact => ({
   notes: c.notes ?? undefined,
   consent: c.consent,
   tags: c.tags ?? [],
+  productStatus: c.product_status,
+  productInterests: c.product_interests ?? [],
+  productClassifiedAt: c.product_classified_at ?? undefined,
 });
 
 export const toConversation = (c: ApiConversation): Conversation => ({
@@ -121,7 +127,13 @@ export class HttpMessageService implements MessageService {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(typeof body.detail === 'string' ? body.detail : `Request failed (${res.status})`);
+      const detail = body.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail) && typeof detail[0]?.msg === 'string'
+          ? detail[0].msg
+          : `Request failed (${res.status})`;
+      throw new Error(message);
     }
     return (res.status === 204 ? undefined : await res.json()) as T;
   }

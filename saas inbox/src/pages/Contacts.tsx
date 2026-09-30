@@ -4,6 +4,7 @@ import { Sidebar } from '../components/inbox/Sidebar';
 import { TagChip, formatDay } from '../components/inbox/ContactPanel';
 import { crmApi, emptyRules, TAG_COLORS, type ContactListItem, type ImportResult, type Segment, type SegmentMembers, type SegmentRules } from '../services/crmApi';
 import type { Consent, ContactTag } from '../types/messaging';
+import { productApi, type Product } from '../services/productApi';
 
 const PLATFORMS = ['whatsapp', 'instagram', 'messenger', 'gmail', 'website'];
 const platformLabel = (p: string) => (p === 'whatsapp' ? 'WhatsApp' : p);
@@ -23,7 +24,7 @@ function ContactsTable({ contacts }: { contacts: ContactListItem[] }) {
         <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
           <tr>
             <th className="px-4 py-3">Name</th><th className="px-4 py-3">Channels</th><th className="px-4 py-3">Phone</th>
-            <th className="px-4 py-3">Email</th><th className="px-4 py-3">Birthday</th><th className="px-4 py-3">Tags</th><th className="px-4 py-3">Last active</th>
+            <th className="px-4 py-3">Email</th><th className="px-4 py-3">Birthday</th><th className="px-4 py-3">Tags</th><th className="px-4 py-3">Products</th><th className="px-4 py-3">Last active</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--color-brand-border)]">
@@ -35,10 +36,11 @@ function ContactsTable({ contacts }: { contacts: ContactListItem[] }) {
               <td className="px-4 py-3">{c.email ?? ''}</td>
               <td className="px-4 py-3">{formatDay(c.birthday ?? undefined)}</td>
               <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{(c.tags ?? []).map(t => <TagChip key={t.id} tag={t} />)}</div></td>
+              <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{(c.product_interests ?? []).map(product => <span key={product.product_id} className="px-2 py-1 text-xs font-medium rounded-md" style={{ color: product.color, backgroundColor: `${product.color}14` }}>{product.name}</span>)}</div></td>
               <td className="px-4 py-3 text-[var(--color-brand-text-secondary)]">{lastActive(c.last_activity_at)}</td>
             </tr>
           ))}
-          {!contacts.length && <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--color-brand-text-secondary)]">No contacts match.</td></tr>}
+          {!contacts.length && <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--color-brand-text-secondary)]">No contacts match.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -88,19 +90,21 @@ function ManageTags({ tags, onChanged, onClose }: { tags: ContactTag[]; onChange
   );
 }
 
-function ContactsTab({ tags, reloadTags }: { tags: ContactTag[]; reloadTags: () => void }) {
+function ContactsTab({ tags, products, reloadTags }: { tags: ContactTag[]; products: Product[]; reloadTags: () => void }) {
   const [q, setQ] = useState('');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [productFilter, setProductFilter] = useState<string[]>([]);
+  const [productStatus, setProductStatus] = useState<'' | 'pending' | 'determined' | 'not_determined'>('');
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [error, setError] = useState('');
 
-  const load = () => crmApi.listContacts(q, tagFilter).then(setContacts).catch(err => setError(err.message));
+  const load = () => crmApi.listContacts(q, tagFilter, productFilter, productStatus || undefined).then(setContacts).catch(err => setError(err.message));
   useEffect(() => {
     const timer = setTimeout(load, 200);
     return () => clearTimeout(timer);
-  }, [q, tagFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, tagFilter, productFilter, productStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const importFile = async (file: File) => {
     setError('');
@@ -139,6 +143,16 @@ function ContactsTab({ tags, reloadTags }: { tags: ContactTag[]; reloadTags: () 
           );
         })}
       </div>
+      <div className="flex flex-wrap items-center gap-2" aria-label="Filter by product interest">
+        <Filter size={14} className="text-gray-400" />
+        {products.map(product => {
+          const on = productFilter.includes(product.id);
+          return <button key={product.id} aria-pressed={on} onClick={() => setProductFilter(on ? productFilter.filter(id => id !== product.id) : [...productFilter, product.id])} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${on ? 'text-white' : 'bg-white'}`} style={on ? { backgroundColor: product.color, borderColor: product.color } : { color: product.color, borderColor: `${product.color}55` }}>{product.name}</button>;
+        })}
+        <select aria-label="Product status" value={productStatus} onChange={event => setProductStatus(event.target.value as typeof productStatus)} className={inputClass}>
+          <option value="">Any product status</option><option value="pending">Not analysed yet</option><option value="determined">Determined</option><option value="not_determined">Not determined</option>
+        </select>
+      </div>
 
       {result && (
         <div role="status" className="bg-white border border-[var(--color-brand-border)] rounded-lg p-3 text-sm">
@@ -161,7 +175,7 @@ function ContactsTab({ tags, reloadTags }: { tags: ContactTag[]; reloadTags: () 
   );
 }
 
-function SegmentsTab({ tags }: { tags: ContactTag[] }) {
+function SegmentsTab({ tags, products }: { tags: ContactTag[]; products: Product[] }) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [rules, setRules] = useState<SegmentRules>(emptyRules());
   const [name, setName] = useState('');
@@ -176,7 +190,7 @@ function SegmentsTab({ tags }: { tags: ContactTag[] }) {
     return () => clearTimeout(timer);
   }, [rules]);
 
-  const toggle = <K extends 'tags' | 'exclude_tags' | 'platforms' | 'consent'>(key: K, value: SegmentRules[K][number]) => {
+  const toggle = <K extends 'tags' | 'exclude_tags' | 'platforms' | 'consent' | 'products'>(key: K, value: SegmentRules[K][number]) => {
     const list = rules[key] as string[];
     setRules({ ...rules, [key]: list.includes(value) ? list.filter(v => v !== value) : [...list, value] });
   };
@@ -223,6 +237,16 @@ function SegmentsTab({ tags }: { tags: ContactTag[] }) {
           {tagPicker('tags')}
         </div>
         <div><div className="font-medium mb-2">Doesn't have tags</div>{tagPicker('exclude_tags')}</div>
+        <div>
+          <div className="font-medium mb-2 flex items-center gap-2">Interested in products
+            <select aria-label="Product match" className="p-1 text-xs rounded border border-[var(--color-brand-border)]" value={rules.products_match} onChange={e => setRules({ ...rules, products_match: e.target.value as 'any' | 'all' })}>
+              <option value="any">any of</option><option value="all">all of</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {products.map(product => <button type="button" key={product.id} aria-pressed={rules.products.includes(product.id)} onClick={() => toggle('products', product.id)} className={chip(rules.products.includes(product.id))} style={rules.products.includes(product.id) ? { backgroundColor: product.color, borderColor: product.color } : { color: product.color }}>{product.name}</button>)}
+          </div>
+        </div>
         <div>
           <div className="font-medium mb-2">Channels</div>
           <div className="flex flex-wrap gap-1.5">
@@ -285,8 +309,10 @@ function SegmentsTab({ tags }: { tags: ContactTag[] }) {
 export default function Contacts() {
   const [tab, setTab] = useState<'contacts' | 'segments'>('contacts');
   const [tags, setTags] = useState<ContactTag[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const reloadTags = () => { crmApi.listTags().then(setTags).catch(() => {}); };
   useEffect(reloadTags, []);
+  useEffect(() => { productApi.list().then(setProducts).catch(() => {}); }, []);
   const sortedTags = useMemo(() => [...tags].sort((a, b) => a.name.localeCompare(b.name)), [tags]);
 
   return (
@@ -302,7 +328,7 @@ export default function Contacts() {
             ))}
           </div>
         </div>
-        {tab === 'contacts' ? <ContactsTab tags={sortedTags} reloadTags={reloadTags} /> : <SegmentsTab tags={sortedTags} />}
+        {tab === 'contacts' ? <ContactsTab tags={sortedTags} products={products} reloadTags={reloadTags} /> : <SegmentsTab tags={sortedTags} products={products} />}
       </main>
     </div>
   );

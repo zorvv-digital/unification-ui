@@ -11,7 +11,7 @@ import { WebsiteChatModal } from '../channels/WebsiteChatModal';
 import { InstagramIcon } from '../icons/InstagramIcon';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Bot, Globe } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 interface SidebarProps {
   isMobileOpen: boolean;
@@ -19,8 +19,6 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
   const [user, setUser] = useState<ApiUser | null>(null);
   const [gmailOpen, setGmailOpen] = useState(false);
   const [websiteOpen, setWebsiteOpen] = useState(false);
@@ -76,9 +74,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           <div>
             <div className="text-xs font-medium text-[var(--color-brand-text-secondary)] uppercase tracking-wider mb-2 px-2">Main</div>
             <nav className="flex flex-col gap-0.5">
-              <SidebarItem icon={<Inbox size={18} />} label="Inbox" active={location.pathname === '/inbox'} badge="12" onClick={() => navigate('/inbox')} />
+              <SidebarItem icon={<Inbox size={18} />} label="Inbox" to="/inbox" badge="12" onClick={onCloseMobile} />
               <SidebarItem icon={<MessageSquare size={18} />} label="Messages" />
-              <SidebarItem icon={<Users size={18} />} label="Contacts" active={location.pathname === '/contacts'} onClick={() => navigate('/contacts')} />
+              <SidebarItem icon={<Users size={18} />} label="Contacts" to="/contacts" onClick={onCloseMobile} />
             </nav>
           </div>
 
@@ -104,8 +102,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
               <SidebarItem 
                 icon={<Bot size={18} />} 
                 label="AI Playground" 
-                active={location.pathname === '/ai-playground'}
-                onClick={() => navigate('/ai-playground')}
+                to="/ai-playground"
+                onClick={onCloseMobile}
               />
             </nav>
           </div>
@@ -147,17 +145,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
 };
 
 // Subcomponent for sidebar items
-function SidebarItem({ icon, label, active, badge, onClick }: { icon: React.ReactNode, label: string, active?: boolean, badge?: string, onClick?: () => void }) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`
-        flex items-center justify-between w-full px-3 py-2 rounded-lg transition-colors text-sm font-medium
-        ${active 
-          ? 'bg-gray-100 text-[var(--color-brand-text)]' 
-          : 'text-[var(--color-brand-text-secondary)] hover:bg-gray-50 hover:text-[var(--color-brand-text)]'}
-      `}
-    >
+function SidebarItem({ icon, label, active, badge, to, onClick }: { icon: React.ReactNode, label: string, active?: boolean, badge?: string, to?: string, onClick?: () => void }) {
+  const content = (
+    <>
       <div className="flex items-center gap-3">
         {icon}
         <span>{label}</span>
@@ -167,6 +157,26 @@ function SidebarItem({ icon, label, active, badge, onClick }: { icon: React.Reac
           {badge}
         </span>
       )}
+    </>
+  );
+  const className = (isActive: boolean) => `
+        flex items-center justify-between w-full px-3 py-2 rounded-lg transition-colors text-sm font-medium
+        ${isActive
+          ? 'bg-gray-100 text-[var(--color-brand-text)]'
+          : 'text-[var(--color-brand-text-secondary)] hover:bg-gray-50 hover:text-[var(--color-brand-text)]'}
+      `;
+
+  if (to) {
+    return (
+      <NavLink to={to} onClick={onClick} className={({ isActive }) => className(isActive)}>
+        {content}
+      </NavLink>
+    );
+  }
+
+  return (
+    <button onClick={onClick} className={className(!!active)}>
+      {content}
     </button>
   );
 }
