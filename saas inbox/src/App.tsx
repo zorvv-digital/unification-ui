@@ -8,6 +8,7 @@ import AIPlayground from './pages/AIPlayground';
 import Login from './pages/Login';
 import Contacts from './pages/Contacts';
 import CustomerApp from './pages/CustomerApp';
+import UserAdPage from './pages/UserAdPage';
 
 function App() {
   // The demo customer app is public: no staff login, so it stays outside the inbox's provider.
@@ -23,6 +24,7 @@ function App() {
           <Route path="/ai-playground" element={<AIPlayground />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/user" element={<UserAdPage />} />
           <Route path="/" element={<Navigate to="/inbox" replace />} />
         </Routes>
       </Router>

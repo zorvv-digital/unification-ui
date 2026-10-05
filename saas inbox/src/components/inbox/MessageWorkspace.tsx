@@ -193,20 +193,53 @@ export const MessageWorkspace: React.FC<MessageWorkspaceProps> = ({
           
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${isFirst ? 'mt-2' : ''}`}>
-              <div className={`
-                max-w-[75%] px-3 py-2 text-[14px] leading-relaxed relative
-                ${bubbleStyle}
-                ${isFirst && isMe ? 'rounded-l-2xl rounded-br-2xl rounded-tr-sm' : ''}
-                ${!isFirst && isMe ? 'rounded-l-2xl rounded-r-sm' : ''}
-                ${isFirst && !isMe ? 'rounded-r-2xl rounded-bl-2xl rounded-tl-sm' : ''}
-                ${!isFirst && !isMe ? 'rounded-r-2xl rounded-l-sm' : ''}
-              `}>
-                <div className="whitespace-pre-wrap">{msg.content}</div>
-                <div className={`text-[9px] mt-1 text-right opacity-70 ${!isMe ? 'text-gray-500' : ''}`}>
-                  {msg.author === 'agent' && <span className="inline-flex items-center gap-0.5 mr-1.5 font-semibold"><Bot size={10} /> AI</span>}
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
+              {(() => {
+                let displayContent = msg.content;
+                let displayAdContext = msg.adContext;
+                if (displayContent.startsWith('{"text":') && displayContent.includes('"adContext":')) {
+                  try {
+                    const parsed = JSON.parse(displayContent);
+                    displayContent = parsed.text;
+                    displayAdContext = parsed.adContext;
+                  } catch (e) {}
+                }
+
+                const bubbleClasses = `
+                  max-w-[75%] px-3 py-2 text-[14px] leading-relaxed relative
+                  ${bubbleStyle}
+                  ${isFirst && isMe ? 'rounded-l-2xl rounded-br-2xl rounded-tr-sm' : ''}
+                  ${!isFirst && isMe ? 'rounded-l-2xl rounded-r-sm' : ''}
+                  ${isFirst && !isMe ? 'rounded-r-2xl rounded-bl-2xl rounded-tl-sm' : ''}
+                  ${!isFirst && !isMe ? 'rounded-r-2xl rounded-l-sm' : ''}
+                `;
+
+                return (
+                  <div className={`flex flex-col gap-1 max-w-full ${isMe ? 'items-end' : 'items-start'}`}>
+                    {displayAdContext && (
+                      <div className="flex mt-1 mb-0.5">
+                        <div className="w-[3px] bg-gray-300 rounded-full mr-3 ml-1" style={{ opacity: 0.6 }}></div>
+                        <div className="flex flex-col pb-1">
+                          <span className="text-[12px] text-gray-500 font-medium mb-2">
+                            Replied to {displayAdContext.source.toLowerCase()}
+                          </span>
+                          <img 
+                            src={displayAdContext.imageUrl} 
+                            alt="Story" 
+                            className="h-44 w-28 object-cover rounded-xl shadow-sm border border-gray-200"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className={bubbleClasses}>
+                      <div className="whitespace-pre-wrap">{displayContent}</div>
+                      <div className={`text-[9px] mt-1 text-right opacity-70 ${!isMe ? 'text-gray-500' : ''}`}>
+                        {msg.author === 'agent' && <span className="inline-flex items-center gap-0.5 mr-1.5 font-semibold"><Bot size={10} /> AI</span>}
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -257,3 +290,4 @@ const MessageSquareIcon = () => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 );
+

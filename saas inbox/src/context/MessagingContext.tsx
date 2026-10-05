@@ -116,7 +116,7 @@ export interface MessagingContextValue extends MessagingState {
   getConversations: (platform?: string) => Conversation[];
   getMessages: (conversationId: string) => Message[];
   sendMessage: (conversationId: string, content: string, type: Message['type']) => Promise<Message>;
-  receiveMessage: (conversationId: string, content: string, type: Message['type']) => Promise<void>;
+  receiveMessage: (conversationId: string, content: string, type: Message['type'], adContext?: Message['adContext']) => Promise<void>;
   markAsRead: (conversationId: string) => Promise<void>;
 }
 
@@ -154,17 +154,21 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     let cancelled = false;
     let source: EventSource | undefined;
-    apiService.loadAll().then(data => {
-      if (cancelled) return;
-      dispatch({ type: 'INITIALIZE', payload: data });
-      source = apiService.subscribe({
-        onMessage: message =>
-          dispatch({ type: message.direction === 'outbound' ? 'MESSAGE_SENT' : 'MESSAGE_RECEIVED', payload: message }),
-        onMessageUpdated: message => dispatch({ type: 'MESSAGE_UPDATED', payload: message }),
-        onConversation: (conversation, contact) =>
-          dispatch({ type: 'CONVERSATION_UPDATED', payload: { conversation, contact } }),
-      });
-    }).catch(err => console.error('Failed to load inbox', err));
+    
+    // Reset demo state on load so that mocked messages and ad leads are cleared
+    apiService.resetDemo()
+      .then(() => apiService.loadAll())
+      .then(data => {
+        if (cancelled) return;
+        dispatch({ type: 'INITIALIZE', payload: data });
+        source = apiService.subscribe({
+          onMessage: message =>
+            dispatch({ type: message.direction === 'outbound' ? 'MESSAGE_SENT' : 'MESSAGE_RECEIVED', payload: message }),
+          onMessageUpdated: message => dispatch({ type: 'MESSAGE_UPDATED', payload: message }),
+          onConversation: (conversation, contact) =>
+            dispatch({ type: 'CONVERSATION_UPDATED', payload: { conversation, contact } }),
+        });
+      }).catch(err => console.error('Failed to load inbox', err));
 
     return () => {
       cancelled = true;
@@ -181,7 +185,7 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       return msg;
     },
 
-    receiveMessage: async (conversationId: string, content: string, type: Message['type']) => {
+    receiveMessage: async (conversationId: string, content: string, type: Message['type'], adContext?: Message['adContext']) => {
       if (apiService) {
         const conversation = stateRef.current.conversations.find(c => c.id === conversationId);
         if (conversation) await apiService.simulateInbound(conversation, content, type);

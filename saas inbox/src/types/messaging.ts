@@ -70,4 +70,9 @@ export interface Message {
   direction: MessageDirection;
   status?: string;
   author?: 'customer' | 'staff' | 'agent';
+  adContext?: {
+    imageUrl: string;
+    title: string;
+    source: string;
+  };
 }

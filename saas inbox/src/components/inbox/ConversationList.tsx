@@ -107,7 +107,16 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   )}
                   <div className="flex justify-between items-center">
                     <p className={`text-[13px] truncate ${conv.unreadCount > 0 ? 'text-[var(--color-brand-text)] font-medium' : 'text-gray-500'}`}>
-                      {lastMsg?.author === 'agent' ? 'AI: ' : lastMsg?.direction === 'outbound' ? 'You: ' : ''}{lastMsg?.content || 'Attachment'}
+                      {lastMsg?.author === 'agent' ? 'AI: ' : lastMsg?.direction === 'outbound' ? 'You: ' : ''}{(() => {
+                        let displayContent = lastMsg?.content || 'Attachment';
+                        if (typeof displayContent === 'string' && displayContent.startsWith('{"text":') && displayContent.includes('"adContext"')) {
+                          try {
+                            const parsed = JSON.parse(displayContent);
+                            return parsed.text;
+                          } catch (e) {}
+                        }
+                        return displayContent;
+                      })()}
                     </p>
                     {conv.needsHuman && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 ml-2 shrink-0">Needs human</span>
@@ -134,3 +143,4 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     </div>
   );
 };
+

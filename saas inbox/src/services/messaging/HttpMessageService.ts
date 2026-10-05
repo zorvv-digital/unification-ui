@@ -195,7 +195,7 @@ export class HttpMessageService implements MessageService {
     }, false);
   }
 
-  async receiveMessage(): Promise<Message> {
+  async receiveMessage(conversationId: string, content: string, type: Message['type'], adContext?: Message['adContext']): Promise<Message> {
     throw new Error('Use simulateInbound; inbound messages arrive through the event stream');
   }
 

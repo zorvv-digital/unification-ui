@@ -16,17 +16,20 @@ export class MockMessageService implements MessageService {
     };
   }
 
-  async receiveMessage(conversationId: string, content: string, type: Message['type']): Promise<Message> {
+  async receiveMessage(conversationId: string, content: string, type: Message['type'], adContext?: Message['adContext']): Promise<Message> {
+    const { mockConversations } = await import('../../data/messaging/mockData');
+    const conversation = mockConversations.find(c => c.id === conversationId);
     return {
       id: Math.random().toString(36).substring(2, 11),
       conversationId,
-      platform: 'whatsapp', // Mock default for Phase 1
-      senderId: 'other',
+      platform: conversation ? conversation.platform : 'whatsapp',
+      senderId: conversation ? conversation.contactId : 'other',
       type,
       content,
       timestamp: Date.now(),
       direction: 'inbound',
-      status: 'delivered'
+      status: 'delivered',
+      adContext
     };
   }
 
